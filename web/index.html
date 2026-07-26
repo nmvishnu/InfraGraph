@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="InfraGraph — Attack Surface Graph Correlator. Visualize your external attack surface with interactive graph mapping of domains, IPs, CNAMEs, and technologies." />
+  <title>InfraGraph — Attack Surface Graph Correlator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <!-- vis.js Network -->
+  <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+</head>
+<body>
+
+<!-- ===== HEADER ===== -->
+<header class="header">
+  <div class="header-brand">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="12" r="3" fill="#00d4ff"/>
+        <circle cx="4" cy="6" r="2" fill="#7c3aed"/>
+        <circle cx="20" cy="6" r="2" fill="#7c3aed"/>
+        <circle cx="4" cy="18" r="2" fill="#f59e0b"/>
+        <circle cx="20" cy="18" r="2" fill="#f59e0b"/>
+        <line x1="12" y1="12" x2="4" y2="6" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.6"/>
+        <line x1="12" y1="12" x2="20" y2="6" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.6"/>
+        <line x1="12" y1="12" x2="4" y2="18" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.6"/>
+        <line x1="12" y1="12" x2="20" y2="18" stroke="#00d4ff" stroke-width="1.5" stroke-opacity="0.6"/>
+      </svg>
+    </div>
+    <div>
+      <h1 class="brand-title">InfraGraph</h1>
+      <span class="brand-sub">Attack Surface Graph Correlator</span>
+    </div>
+  </div>
+
+  <div class="header-stats" id="stats-bar">
+    <div class="stat-chip" id="stat-domains">
+      <span class="stat-label">Domains</span>
+      <span class="stat-value" id="val-domains">—</span>
+    </div>
+    <div class="stat-chip" id="stat-ips">
+      <span class="stat-label">IPs</span>
+      <span class="stat-value" id="val-ips">—</span>
+    </div>
+    <div class="stat-chip" id="stat-cnames">
+      <span class="stat-label">CNAMEs</span>
+      <span class="stat-value" id="val-cnames">—</span>
+    </div>
+    <div class="stat-chip" id="stat-tech">
+      <span class="stat-label">Technologies</span>
+      <span class="stat-value" id="val-tech">—</span>
+    </div>
+    <div class="stat-chip" id="stat-edges">
+      <span class="stat-label">Relationships</span>
+      <span class="stat-value" id="val-edges">—</span>
+    </div>
+  </div>
+
+  <div class="header-actions">
+    <div class="status-dot" id="status-dot" title="Neo4j connection status"></div>
+    <span class="status-label" id="status-label">Connecting…</span>
+  </div>
+</header>
+
+<!-- ===== MAIN LAYOUT ===== -->
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <section class="sidebar-section">
+      <h2 class="section-title">Attack Path Queries</h2>
+      <p class="section-desc">Pre-built Cypher queries that surface high-value targets instantly.</p>
+
+      <button class="query-btn" id="btn-full-graph" onclick="loadGraph('full')">
+        <span class="btn-icon">🌐</span>
+        <div>
+          <div class="btn-title">Full Graph</div>
+          <div class="btn-desc">All nodes and relationships</div>
+        </div>
+      </button>
+
+      <button class="query-btn danger" id="btn-dangling" onclick="loadGraph('dangling-dns')">
+        <span class="btn-icon">⚠️</span>
+        <div>
+          <div class="btn-title">Dangling DNS</div>
+          <div class="btn-desc">Subdomain takeover candidates</div>
+        </div>
+      </button>
+
+      <button class="query-btn warning" id="btn-shared" onclick="loadGraph('shared-infra')">
+        <span class="btn-icon">🔗</span>
+        <div>
+          <div class="btn-title">Shared Infrastructure</div>
+          <div class="btn-desc">IPs hosting multiple domains</div>
+        </div>
+      </button>
+
+      <button class="query-btn success" id="btn-tech" onclick="loadGraph('tech-exposure')">
+        <span class="btn-icon">⚙️</span>
+        <div>
+          <div class="btn-title">Technology Exposure</div>
+          <div class="btn-desc">Domain → tech stack mapping</div>
+        </div>
+      </button>
+    </section>
+
+    <section class="sidebar-section">
+      <h2 class="section-title">Graph Controls</h2>
+      <div class="control-row">
+        <label class="control-label" for="physics-toggle">Physics simulation</label>
+        <label class="toggle" for="physics-toggle">
+          <input type="checkbox" id="physics-toggle" checked onchange="togglePhysics(this.checked)" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+      <div class="control-row">
+        <label class="control-label" for="labels-toggle">Show edge labels</label>
+        <label class="toggle" for="labels-toggle">
+          <!-- unchecked by default — big perf win on large graphs -->
+          <input type="checkbox" id="labels-toggle" onchange="toggleEdgeLabels(this.checked)" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <!-- Node limit slider -->
+      <div class="control-group">
+        <label class="control-label" for="node-limit-slider">
+          Node limit: <strong id="node-limit-val">300</strong>
+        </label>
+        <input
+          type="range" id="node-limit-slider"
+          min="50" max="2000" step="50" value="300"
+          class="node-slider"
+          title="Cap number of nodes sent from the server. Lower = faster rendering."
+        />
+        <div class="slider-hints"><span>50</span><span>fast</span><span>2000</span></div>
+      </div>
+
+      <button class="control-btn" onclick="fitGraph()">⊞ Fit to View</button>
+      <button class="control-btn" id="btn-cluster" onclick="toggleClustering()">🗂 Cluster</button>
+      <button class="control-btn" onclick="exportPNG()">⬇ Export PNG</button>
+    </section>
+
+    <section class="sidebar-section">
+      <h2 class="section-title">Legend</h2>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot domain"></span>Domain</div>
+        <div class="legend-item"><span class="legend-dot ip"></span>IP Address</div>
+        <div class="legend-item"><span class="legend-dot cname"></span>CNAME</div>
+        <div class="legend-item"><span class="legend-dot tech"></span>Technology</div>
+        <div class="legend-item"><span class="legend-dot title"></span>HTTP Title</div>
+      </div>
+    </section>
+  </aside>
+
+  <!-- GRAPH CANVAS -->
+  <main class="graph-wrapper">
+    <div id="loading-overlay" class="loading-overlay">
+      <div class="loading-card">
+        <div class="loading-spinner"></div>
+        <p class="progress-label" id="progress-label">Loading graph data…</p>
+        <div class="progress-track">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <span class="progress-pct" id="progress-pct">0%</span>
+      </div>
+    </div>
+    <div id="graph-canvas" class="graph-canvas"></div>
+    <div id="list-view" class="list-view hidden">
+      <!-- Generated lists will be injected here -->
+    </div>
+
+    <!-- Toolbar -->
+    <div class="graph-toolbar">
+      <div class="toolbar-left">
+        <span class="toolbar-label" id="graph-title">Full Attack Surface</span>
+        <span class="node-count" id="node-count"></span>
+      </div>
+      
+      <div class="view-toggle">
+        <button class="view-btn active" id="btn-view-graph" onclick="toggleViewMode('graph')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg>
+          Graph
+        </button>
+        <button class="view-btn" id="btn-view-list" onclick="toggleViewMode('list')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+          List
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- INSPECTOR PANEL -->
+  <div class="inspector" id="inspector">
+    <div class="inspector-header">
+      <h3 class="inspector-title">Node Inspector</h3>
+      <button class="inspector-close" onclick="closeInspector()">✕</button>
+    </div>
+    <div class="inspector-body" id="inspector-body">
+      <p class="inspector-hint">Click a node in the graph to inspect its properties.</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== TOAST ===== -->
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

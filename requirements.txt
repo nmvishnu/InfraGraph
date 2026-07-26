@@ -1,0 +1,22 @@
+# InfraGraph ASM - External Tool Requirements
+# Ensure these tools are installed and available in your system PATH or ~/go/bin/ before running the pipeline.
+
+# 1. Subfinder (ProjectDiscovery)
+# Used for fast, passive subdomain enumeration.
+go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
+
+# 2. httpx (ProjectDiscovery)
+# Used for active probing, title fetching, IP resolution, and tech detection.
+# Note: The pipeline explicitly looks for ~/go/bin/httpx or 'httpx-toolkit' to avoid conflicts with the Python httpx library.
+go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+
+# 3. Amass (OWASP)
+# Used for deep, extensive subdomain enumeration and mapping.
+# Note: The pipeline explicitly looks for the binary named 'amass-v4'. 
+# It is highly recommended to download the pre-compiled binary from GitHub rather than using apt.
+# Download: https://github.com/owasp-amass/amass/releases
+
+# 4. Neo4j Community Edition (v4 or v5)
+# The graph database backend. Must be accessible via the bolt protocol on port 7687.
+# You can use the included docker-compose.yml to run this easily:
+# docker compose up -d

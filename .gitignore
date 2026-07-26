@@ -1,0 +1,10 @@
+output/
+build/
+*.log
+.env
+neo4j/data/
+neo4j/logs/
+neo4j/run/
+neo4j/certificates/
+neo4j/licenses/
+/tmp/neo4j.tar.gz
