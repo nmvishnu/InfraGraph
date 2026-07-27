@@ -93,7 +93,7 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 > **Graph View** — Full attack surface visualization
 > ```
-> ![Graph View]<img src="docs/screenshots/graph-view.png" alt="Graph View Screenshot" width="100%">
+> ![Graph View]<img src="[docs/screenshots/graph-view.png](https://github.com/nmvishnu/InfraGraph/blob/main/docs/screenshots/graph-view.png)" alt="Graph View Screenshot" width="100%">
 
 > ```
 
