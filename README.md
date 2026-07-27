@@ -93,10 +93,13 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 > **Graph View** — Full attack surface visualization
 > ![Graph View](docs/screenshots/graph-view.png)
+> 
 > **Dangling DNS** — Subdomain takeover candidates highlighted
 > ![Dangling DNS](docs/screenshots/dangling-dns.png)
+> 
 > **Shared Infrastructure** — Origin server leak detection
 > ![Shared Infra](docs/screenshots/shared-infra.png)
+> 
 > **Technology Exposure** — Tech stack mapping per domain
 > ![Tech Exposure](docs/screenshots/tech-exposure.png)
 
