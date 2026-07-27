@@ -180,8 +180,8 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 ### Step 1 — Clone & Build
 
 ```bash
-git clone https://github.com/<your-username>/InfraGraphASM.git
-cd InfraGraphASM
+git clone https://github.com/nmvishnu/InfraGraph.git
+cd InfraGraph
 make build
 ```
 
@@ -437,7 +437,7 @@ rm -rf output/
 ## 📁 Project Structure
 
 ```
-InfraGraphASM/
+InfraGraph/
 ├── cmd/
 │   └── infragraph/
 │       └── main.go                 # CLI entry point & flag parsing
