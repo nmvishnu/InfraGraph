@@ -1,4 +1,3 @@
-<img width="1917" height="767" alt="infragraph-ui" src="https://github.com/user-attachments/assets/20200b6b-bccc-4ee2-9dd9-1d14a0746d04" />
 <div align="center">
 
 # 🕸️ InfraGraph — Attack Surface Graph Correlator
@@ -20,7 +19,7 @@ InfraGraph is an **OSINT / Attack Surface Management** pipeline that ingests out
 > 📸 **Screenshot placeholder** — Add a screenshot of the InfraGraph graph UI here.
 >
 > ```
-> [InfraGraph UI][(docs/screenshots/infragraph-ui.png)](https://github.com/nmvishnu/InfraGraph/blob/ff0e920fd33e9ff1da3c4a09ae5adc392da81d84/docs/screenshots/infragraph-ui.png)
+> [InfraGraph UI](docs/screenshots/infragraph-ui.png)
 > ```
 
 </div>
