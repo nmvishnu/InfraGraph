@@ -93,7 +93,8 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 > **Graph View** — Full attack surface visualization
 > ```
-> ![Graph View](docs/screenshots/graph-view.png)
+> ![Graph View]<img src="docs/screenshots/graph-view.png" alt="Graph View Screenshot" width="100%">
+
 > ```
 
 > **Dangling DNS** — Subdomain takeover candidates highlighted
