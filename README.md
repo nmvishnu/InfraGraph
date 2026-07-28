@@ -80,11 +80,8 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 <!-- VIDEO PLACEHOLDER -->
 <!-- Replace with an actual demo recording (GIF or MP4) -->
-> 🎥 **Demo video placeholder** — Add a GIF or video walkthrough here.
->
-> ```
-> ![InfraGraph Demo](docs/demo/infragraph-demo.gif)
-> ```
+> 🎥 **Demo Video**
+> ![InfraGraph Demo](docs/demo/demo.mp4)
 
 <!-- ADDITIONAL SCREENSHOTS -->
 <details>
@@ -115,13 +112,13 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
                         │                    InfraGraph Pipeline                   │
                         │                                                          │
   ┌────────────┐        │   ┌───────────┐                                          │
-  │  Subfinder  │───────┼──▶│           │                                          │
+  │  Subfinder  │───────┼─▶│           │                                          │
   └────────────┘        │   │  Go       │    ┌──────────┐    ┌────────┐    ┌─────┐ │
   ┌────────────┐        │   │  Parser   │───▶│  Neo4j   │───▶│ Go API │───▶│ UI  │ │
-  │   Amass    │───────┼──▶│  Engine   │    │  Graph   │    │ Server │    │vis.js│ │
+  │   Amass    │────────┼─▶│  Engine   │    │  Graph   │    │ Server │    │vis.js│ │
   └────────────┘        │   │           │    │  Store   │    └────────┘    └─────┘ │
   ┌────────────┐        │   └───────────┘    └──────────┘                          │
-  │   httpx    │───────┼──▶     │                 ▲                                │
+  │   httpx    │────────┼─▶     │                 ▲                                │
   └────────────┘        │       ▼                 │                                │
                         │   output/*.json    bolt://7687                            │
                         └──────────────────────────────────────────────────────────┘
@@ -131,7 +128,7 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 ```
   ┌──────────┐  RESOLVES_TO   ┌──────┐
-  │  Domain  │───────────────▶│  IP  │
+  │  Domain  │──────────────▶│  IP  │
   │          │                └──────┘
   │          │  HAS_CNAME     ┌───────┐
   │          │───────────────▶│ CNAME │
