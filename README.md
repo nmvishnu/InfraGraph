@@ -16,10 +16,6 @@ InfraGraph is an **OSINT / Attack Surface Management** pipeline that ingests out
 
 > ![InfraGraph UI](docs/screenshots/infragraph-ui.png)
 
-</div>
-
----
-
 ## 📋 Table of Contents
 
 - [The Problem](#-the-problem)
