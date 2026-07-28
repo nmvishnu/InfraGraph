@@ -14,9 +14,6 @@ InfraGraph is an **OSINT / Attack Surface Management** pipeline that ingests out
 
 ---
 
-<!-- HERO SCREENSHOT -->
-<!-- Replace with an actual screenshot of the InfraGraph web UI -->
-> 📸 **Screenshot placeholder** — Add a screenshot of the InfraGraph graph UI here.
 > ![InfraGraph UI](docs/screenshots/infragraph-ui.png)
 
 </div>
@@ -75,8 +72,6 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 ## 🎬 Demo
 
-<!-- VIDEO PLACEHOLDER -->
-<!-- Replace with an actual demo recording (GIF or MP4) -->
 > 🎥 **Demo Video**
 > ![InfraGraph Demo](docs/demo/demo.mp4)
 
