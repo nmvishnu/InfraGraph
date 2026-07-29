@@ -29,7 +29,6 @@ InfraGraph is an **OSINT / Attack Surface Management** pipeline that ingests out
 - [Web UI Guide](#-web-ui-guide)
 - [Cypher Query Cookbook](#-cypher-query-cookbook)
 - [Database Management](#-database-management)
-- [Project Structure](#-project-structure)
 - [Troubleshooting](#-troubleshooting)
 - [Security & Ethics](#-security--ethics)
 - [Contributing](#-contributing)
@@ -365,49 +364,6 @@ rm -rf output/
 
 ```bash
 ./build/infragraph -target example.com -fresh
-```
-
----
-
-## 📁 Project Structure
-
-```
-InfraGraph/
-├── cmd/
-│   └── infragraph/
-│       └── main.go                 # CLI entry point & flag parsing
-├── internal/
-│   ├── api/
-│   │   └── server.go               # HTTP API + static file server
-│   ├── graph/
-│   │   ├── client.go               # Neo4j driver & session management
-│   │   ├── ingest.go               # Cypher MERGE ingestion logic
-│   │   └── queries.go              # Pre-built graph query functions
-│   ├── parser/
-│   │   ├── subfinder.go            # Subfinder JSON output parser
-│   │   ├── amass.go                # Amass JSON output parser
-│   │   └── httpx.go                # httpx JSON output parser
-│   └── runner/
-│       └── runner.go               # OSINT tool orchestration
-├── web/
-│   ├── index.html                  # Main UI (vis.js network graph)
-│   ├── app.js                      # Graph rendering & API integration
-│   └── style.css                   # Dark-mode glassmorphism theme
-├── docker/
-│   ├── Dockerfile                  # Multi-stage build (Go + tools)
-│   ├── docker-compose.yml          # Full stack (Neo4j + InfraGraph)
-│   ├── run.sh                      # Docker helper script
-│   └── README.md                   # Docker-specific documentation
-├── scripts/
-│   ├── neo4j.sh                    # Neo4j start/stop/reset helper
-│   └── seed-demo.sh                # Seed demo data for testing
-├── neo4j/                          # Bundled Neo4j Community Edition
-├── output/                         # Raw JSON scan outputs (gitignored)
-├── Makefile                        # Build, run, and manage shortcuts
-├── requirements.txt                # External tool requirements
-├── go.mod
-├── go.sum
-└── README.md
 ```
 
 ---
