@@ -70,7 +70,7 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 ## 🎬 Demo
 
 > 🎥 **Demo Video**
-![InfraGraph Demo](docs/demo/demo.mp4)
+![InfraGraph Demo](docs/demo/demo.gif)
 
 </div>
 
