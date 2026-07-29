@@ -3,7 +3,8 @@
 # 🕸️ InfraGraph — Attack Surface Graph Correlator
 
 **Turn hours of manual grep/awk into instant visual attack-path queries.**
-
+</div>
+<div>
 [![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev) [![Neo4j](https://img.shields.io/badge/Neo4j-5.x-4581C3?style=flat-square&logo=neo4j&logoColor=white)](https://neo4j.com) [![vis.js](https://img.shields.io/badge/vis.js-Network-f5a623?style=flat-square)](https://visjs.org) [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker&logoColor=white)](#-docker-one-command-setup) [![License](https://img.shields.io/badge/License-MIT-7c3aed?style=flat-square)](#license)
 
 InfraGraph is an **OSINT / Attack Surface Management** pipeline that ingests output from `subfinder`, `amass`, and `httpx`, builds a **relational graph** in Neo4j, and renders it as an interactive **vis.js** network — highlighting **dangling DNS**, **shared infrastructure**, and **technology exposure** in seconds.
