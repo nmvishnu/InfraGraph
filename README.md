@@ -23,7 +23,6 @@ InfraGraph is an **OSINT / Attack Surface Management** pipeline that ingests out
 - [The Problem](#-the-problem)
 - [Features](#-features)
 - [Demo](#-demo)
-- [Architecture](#-architecture)
 - [Quick Start — Manual Install](#-quick-start--manual-install)
 - [Quick Start — Docker (One-Command Setup)](#-docker-one-command-setup)
 - [CLI Reference](#-cli-reference)
@@ -94,52 +93,6 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 
 </details>
-
----
-
-## 🏗️ Architecture
-
-```
-                        ┌──────────────────────────────────────────────────────────┐
-                        │                    InfraGraph Pipeline                   │
-                        │                                                          │
-  ┌────────────┐        │   ┌───────────┐                                          │
-  │  Subfinder  │───────┼─▶│           │                                          │
-  └────────────┘        │   │  Go       │    ┌──────────┐    ┌────────┐    ┌─────┐ │
-  ┌────────────┐        │   │  Parser   │───▶│  Neo4j   │───▶│ Go API │───▶│ UI  │ │
-  │   Amass    │────────┼─▶│  Engine   │    │  Graph   │    │ Server │    │vis.js│ │
-  └────────────┘        │   │           │    │  Store   │    └────────┘    └─────┘ │
-  ┌────────────┐        │   └───────────┘    └──────────┘                          │
-  │   httpx    │────────┼─▶     │                 ▲                                │
-  └────────────┘        │       ▼                 │                                │
-                        │   output/*.json    bolt://7687                            │
-                        └──────────────────────────────────────────────────────────┘
-```
-
-### Graph Schema
-
-```
-  ┌──────────┐  RESOLVES_TO   ┌──────┐
-  │  Domain  │──────────────▶│  IP  │
-  │          │                └──────┘
-  │          │  HAS_CNAME     ┌───────┐
-  │          │───────────────▶│ CNAME │
-  │          │                └───────┘
-  │          │  RUNS_ON       ┌────────────┐
-  │          │───────────────▶│ Technology │
-  │          │                └────────────┘
-  │          │  HAS_TITLE     ┌───────────┐
-  │          │───────────────▶│ HTTPTitle │
-  └──────────┘                └───────────┘
-```
-
-| Node | Key Properties |
-|------|---------------|
-| `Domain` | `name`, `url`, `status_code`, `scheme` |
-| `IP` | `address`, `asn`, `cidr`, `desc` |
-| `CNAME` | `target` |
-| `Technology` | `name` |
-| `HTTPTitle` | `text` |
 
 ---
 
