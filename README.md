@@ -98,7 +98,7 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 | Requirement | Version | Install |
 |------------|---------|---------|
 | **Go** | 1.26+ | [go.dev/dl](https://go.dev/dl/) |
-| **Neo4j** | 5.x Community | [neo4j.com/download](https://neo4j.com/download/) or use the bundled `neo4j/` folder |
+| **Neo4j** | 5.x Community | [neo4j.com/download](https://neo4j.com/download/) OR use the bundled `neo4j/` folder |
 | **Java** | 21+ | `sudo apt install openjdk-21-jre` (required by Neo4j) |
 | **Subfinder** | Latest | `go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest` |
 | **httpx** | Latest | `go install github.com/projectdiscovery/httpx/cmd/httpx@latest` |
@@ -107,17 +107,15 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 > [!NOTE]
 > On Kali Linux and some Debian systems, the system `httpx` package conflicts with the Go tool. InfraGraph handles this automatically by searching `~/go/bin/httpx` first, then falling back to `httpx-toolkit`.
 
-### Step 1 — Clone & Build
+### Step 1 — Clone
 
 ```bash
 git clone https://github.com/nmvishnu/InfraGraph.git
 cd InfraGraph
-make build
 ```
 
 ### Step 2 — Start Neo4j
 
-**Option A — Use the bundled standalone Neo4j:**
 ```bash
 ./scripts/neo4j.sh start
 ```
@@ -130,8 +128,9 @@ This exposes:
 ### Step 3 — Run a Scan
 
 ```bash
-make run TARGET=example.com
+./build/infragraph -target <domain.com>
 ```
+For wiping previous results, use the -reset flag or refer CLI Reference section.
 
 ### Step 4 — Explore the Graph
 
