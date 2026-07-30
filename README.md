@@ -130,7 +130,7 @@ This exposes:
 ```bash
 ./build/infragraph -target <domain.com>
 ```
-To clear previous results, use the -reset flag or refer to the CLI Reference](#-cli-reference) section.
+To clear previous results, use the -reset flag or refer to the CLI Reference](#cli-reference) section.
 
 ### Step 4 — Explore the Graph
 
@@ -234,13 +234,6 @@ Data Management:
 # Just view the existing graph (no scanning)
 ./build/infragraph -serve-only
 
-# Connect to a remote Neo4j instance
-./build/infragraph -target example.com -neo4j bolt://10.0.0.5:7687 -pass s3cret
-
-# Use the Makefile shortcuts
-make run TARGET=example.com
-make ingest
-make serve
 ```
 
 ---
