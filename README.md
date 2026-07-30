@@ -27,7 +27,6 @@ InfraGraph is an **OSINT / Attack Surface Management** pipeline that ingests out
 - [Database Management](#-database-management)
 - [Troubleshooting](#-troubleshooting)
 - [Security & Ethics](#-security--ethics)
-- [Contributing](#-contributing)
 - [License](#license)
 
 ---
@@ -426,26 +425,6 @@ Click the **"Full Graph"** button in the sidebar. The graph doesn't auto-load to
 | 🐛 **Bug Bounty Hunters** | Find takeover targets and hidden origin servers fast |
 | 🏢 **ASM Engineers** | Continuous visibility into forgotten external assets |
 | 🎓 **Security Researchers** | Graph-based analysis of internet infrastructure |
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Here's how to get started:
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Commit** your changes (`git commit -m 'Add amazing feature'`)
-4. **Push** to the branch (`git push origin feature/amazing-feature`)
-5. **Open** a Pull Request
-
-### Areas for Contribution
-
-- [ ] Additional OSINT tool integrations (e.g., `dnsx`, `naabu`)
-- [ ] Export graph data as CSV/JSON from the UI
-- [ ] Historical scan comparison (time-travel slider)
-- [ ] Additional graph queries and attack path patterns
-- [ ] CI/CD pipeline and automated testing
 
 ---
 
