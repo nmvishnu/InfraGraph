@@ -189,7 +189,7 @@ The Docker setup bundles **everything** — Go binary, Subfinder, httpx, Amass, 
 
 ---
 
-## ⌨️ CLI Reference
+## CLI Reference
 
 ```
 Usage: infragraph [flags]
