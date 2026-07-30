@@ -130,7 +130,7 @@ This exposes:
 ```bash
 ./build/infragraph -target <domain.com>
 ```
-For wiping previous results, use the -reset flag or refer CLI Reference section.
+To clear previous results, use the -reset flag or refer to the CLI Reference](#-cli-reference) section.
 
 ### Step 4 — Explore the Graph
 
