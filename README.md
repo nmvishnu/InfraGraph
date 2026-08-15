@@ -19,8 +19,8 @@ InfraGraph is an **OSINT / Attack Surface Management** pipeline that ingests out
 - [The Problem](#-the-problem)
 - [Features](#-features)
 - [Demo](#-demo)
-- [Quick Start — Manual Install](#-quick-start--manual-install)
-- [Quick Start — Docker (One-Command Setup)](#-docker-one-command-setup)
+- [Quick Start - Manual Install](#-quick-start--manual-install)
+- [Quick Start - Docker (One-Command Setup)](#-docker-one-command-setup)
 - [CLI Reference](#-cli-reference)
 - [Web UI Guide](#-web-ui-guide)
 - [Cypher Query Cookbook](#-cypher-query-cookbook)
@@ -37,8 +37,8 @@ Recon tools like Subfinder, Amass, and httpx output **flat text/JSON files**. Re
 
 ```
 mail.target.com   →  104.21.55.12
-old.target.com    →  s3-website.amazonaws.com    ← ⚠️ Dangling DNS — takeover candidate!
-api.target.com    →  104.21.55.12                ← 🔗 Shared infra with mail — origin leak!
+old.target.com    →  s3-website.amazonaws.com    ← ⚠️ Dangling DNS - takeover candidate!
+api.target.com    →  104.21.55.12                ← 🔗 Shared infra with mail - origin leak!
 cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposure
 ```
 
@@ -53,7 +53,7 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 | 🔍 **Automated Recon** | Runs Subfinder + Amass concurrently, probes with httpx |
 | 🕸️ **Graph Correlation** | Builds a Neo4j graph connecting domains, IPs, CNAMEs, and technologies |
 | ⚠️ **Dangling DNS Detection** | Finds CNAME records pointing to cloud services that can be taken over |
-| 🔗 **Shared Infrastructure** | Discovers IPs serving multiple domains — origin server leaks |
+| 🔗 **Shared Infrastructure** | Discovers IPs serving multiple domains - origin server leaks |
 | ⚙️ **Technology Mapping** | Maps every domain to its detected tech stack (Nginx, React, etc.) |
 | 🌐 **Interactive Web UI** | Dark-mode vis.js graph with click-to-query, search, and hover tooltips |
 | 🐳 **Docker Support** | One-command deployment with all tools pre-installed |
@@ -73,16 +73,16 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 <summary>📸 <strong>Click to expand screenshots</strong></summary>
 <br>
 
-> **Graph View** — Full attack surface visualization
+> **Graph View** - Full attack surface visualization
 > ![Graph View](docs/screenshots/graph-view.png)
 > 
-> **Dangling DNS** — Subdomain takeover candidates highlighted
+> **Dangling DNS** - Subdomain takeover candidates highlighted
 > ![Dangling DNS](docs/screenshots/dangling-dns.png)
 > 
-> **Shared Infrastructure** — Origin server leak detection
+> **Shared Infrastructure** - Origin server leak detection
 > ![Shared Infra](docs/screenshots/shared-infra.png)
 > 
-> **Technology Exposure** — Tech stack mapping per domain
+> **Technology Exposure** - Tech stack mapping per domain
 > ![Tech Exposure](docs/screenshots/tech-exposure.png)
 
 
@@ -90,7 +90,7 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 ---
 
-## 🚀 Quick Start — Manual Install
+## 🚀 Quick Start - Manual Install
 
 ### Prerequisites
 
@@ -106,14 +106,14 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 > [!NOTE]
 > On Kali Linux and some Debian systems, the system `httpx` package conflicts with the Go tool. InfraGraph handles this automatically by searching `~/go/bin/httpx` first, then falling back to `httpx-toolkit`.
 
-### Step 1 — Clone
+### Step 1 - Clone
 
 ```bash
 git clone https://github.com/nmvishnu/InfraGraph.git
 cd InfraGraph
 ```
 
-### Step 2 — Start Neo4j
+### Step 2 - Start Neo4j
 
 ```bash
 ./scripts/neo4j.sh start
@@ -124,14 +124,14 @@ This exposes:
 - **Bolt URI:** `bolt://localhost:7687`
 - **Credentials:** `neo4j` / `infragraph`
 
-### Step 3 — Run a Scan
+### Step 3 - Run a Scan
 
 ```bash
 ./build/infragraph -target <domain.com>
 ```
 To clear previous results, use the `-reset` flag or refer to the [CLI Reference](#cli-reference) section.
 
-### Step 4 — Explore the Graph
+### Step 4 - Explore the Graph
 
 Open **http://localhost:8080** in your browser.
 
@@ -139,7 +139,7 @@ Open **http://localhost:8080** in your browser.
 
 ## 🐳 Docker (One-Command Setup)
 
-The Docker setup bundles **everything** — Go binary, Subfinder, httpx, Amass, and Neo4j — so you don't need to install anything except Docker.
+The Docker setup bundles **everything** - Go binary, Subfinder, httpx, Amass, and Neo4j - so you don't need to install anything except Docker.
 
 ### Build
 
@@ -224,7 +224,7 @@ Data Management:
 # Re-scan a target (wipe old data for this domain first)
 ./build/infragraph -target example.com -fresh
 
-# Nuclear option — wipe entire database and start fresh
+# Nuclear option - wipe entire database and start fresh
 ./build/infragraph -target example.com -reset
 
 # Re-ingest after manually editing output JSON files
@@ -247,7 +247,7 @@ The web UI is accessible at **http://localhost:8080** after starting InfraGraph.
 |--------|-------|---------------|
 | 🌐 **Full Graph** | All nodes & edges | Complete attack surface visualization |
 | ⚠️ **Dangling DNS** | Orphaned CNAMEs | Subdomain takeover candidates pointing to unclaimed cloud resources |
-| 🔗 **Shared Infrastructure** | Multi-homed IPs | IPs serving multiple domains — origin server leaks |
+| 🔗 **Shared Infrastructure** | Multi-homed IPs | IPs serving multiple domains - origin server leaks |
 | ⚙️ **Technology Exposure** | Tech stack map | Domain → technology relationships (Nginx, React, WordPress, etc.) |
 | 🏠 **IP Addresses** | IP listing | All discovered IP addresses with ASN data |
 
@@ -266,7 +266,7 @@ The web UI is accessible at **http://localhost:8080** after starting InfraGraph.
 Run these directly in the **Neo4j Browser** at `http://localhost:7474`:
 
 <details>
-<summary><strong>⚠️ Dangling DNS — Subdomain Takeover Candidates</strong></summary>
+<summary><strong>⚠️ Dangling DNS - Subdomain Takeover Candidates</strong></summary>
 
 ```cypher
 MATCH (d:Domain)-[:HAS_CNAME]->(c:CNAME)
@@ -279,7 +279,7 @@ ORDER BY c.target
 </details>
 
 <details>
-<summary><strong>🔗 Shared Infrastructure — Origin Server Leaks</strong></summary>
+<summary><strong>🔗 Shared Infrastructure - Origin Server Leaks</strong></summary>
 
 ```cypher
 MATCH (d1:Domain)-[:RESOLVES_TO]->(i:IP)<-[:RESOLVES_TO]-(d2:Domain)
@@ -330,10 +330,10 @@ ORDER BY d.name
 ### Reset Database (Wipe All Scan Data)
 
 ```bash
-# Option 1 — Using the helper script
+# Option 1 - Using the helper script
 ./scripts/neo4j.sh reset
 
-# Option 2 — Manual reset
+# Option 2 - Manual reset
 ./scripts/neo4j.sh stop          # or: pkill -f neo4j
 rm -rf neo4j/data/databases
 rm -rf neo4j/data/transactions
@@ -358,7 +358,7 @@ rm -rf output/
 ## 🔧 Troubleshooting
 
 <details>
-<summary><strong>Neo4j won't start — "Address already in use"</strong></summary>
+<summary><strong>Neo4j won't start - "Address already in use"</strong></summary>
 
 Another process is using port 7474 or 7687. Find and stop it:
 ```bash
@@ -411,8 +411,8 @@ Click the **"Full Graph"** button in the sidebar. The graph doesn't auto-load to
 > Only scan domains you **own** or have **explicit written permission** to test.
 
 - Respect bug bounty program scope definitions
-- Output files in `output/` may contain sensitive infrastructure data — treat accordingly
-- The Neo4j database stores a complete map of discovered assets — secure access appropriately
+- Output files in `output/` may contain sensitive infrastructure data - treat accordingly
+- The Neo4j database stores a complete map of discovered assets - secure access appropriately
 - API keys stored in `~/.config/subfinder/provider-config.yaml` are sensitive credentials
 
 ---
@@ -430,7 +430,7 @@ Click the **"Full Graph"** button in the sidebar. The graph doesn't auto-load to
 
 ## 📄 License
 
-This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
 ---
 
