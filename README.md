@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🕸️ InfraGraph — Attack Surface Graph Correlator
+# 🕸️ InfraGraph - Attack Surface Graph Correlator
 
 **Turn hours of manual grep/awk into instant visual attack-path queries.**
   
