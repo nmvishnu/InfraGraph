@@ -210,14 +210,12 @@ async function loadGraph(query) {
 
   const endpointMap = {
     'full':          `/api/graph?limit=${nodeLimit}`,
-    'dangling-dns':  '/api/query/dangling-dns',
     'shared-infra':  '/api/query/shared-infra',
     'tech-exposure': '/api/query/tech-exposure',
   };
 
   const titleMap = {
     'full':          'Full Attack Surface',
-    'dangling-dns':  '⚠️ Dangling DNS — Takeover Candidates',
     'shared-infra':  '🔗 Shared Infrastructure',
     'tech-exposure': '⚙️ Technology Exposure',
   };
@@ -340,10 +338,7 @@ function renderGraph(data, query, titleLabel) {
       network.setOptions({ physics: { enabled: false } });
       setStage('done');
       setTimeout(hideLoading, 200);
-      const emptyMsg = currentQuery === 'dangling-dns'
-        ? 'No dangling DNS found — great security posture!'
-        : 'No data found. Run a scan first (-target example.com).';
-      showToast(emptyMsg, 'warn');
+      showToast('No data found. Run a scan first (-target example.com).', 'warn');
       return;
     }
 
@@ -522,22 +517,7 @@ function renderListView(data, query) {
 
   let html = '<table class="data-table"><thead><tr><th class="num-col">#</th>';
 
-  if (query === 'dangling-dns') {
-    html += '<th>Domain (Takeover Candidate)</th><th>Dangling CNAME Target</th></tr></thead><tbody>';
-    // Find Dangling CNAME edges
-    let count = 1;
-    const danglingEdges = data.edges.filter(e => e.label === 'DANGLING_CNAME');
-    danglingEdges.forEach(e => {
-      const fromNode = data.nodes.find(n => n.id === e.from);
-      const toNode   = data.nodes.find(n => n.id === e.to);
-      if (fromNode && toNode) {
-        html += `<tr><td class="num-col">${count++}</td>
-                 <td><strong>${esc(fromNode.title)}</strong></td>
-                 <td><span class="list-badge cname">${esc(toNode.title)}</span></td></tr>`;
-      }
-    });
-  } 
-  else if (query === 'shared-infra') {
+  if (query === 'shared-infra') {
     html += '<th>Shared IP Address</th><th>Hosted Domains</th></tr></thead><tbody>';
     // Group domains by IP
     const ipMap = {};
@@ -661,7 +641,6 @@ function updateActiveButton(query) {
   document.querySelectorAll('.query-btn').forEach(b => b.classList.remove('active'));
   const map = {
     'full':          'btn-full-graph',
-    'dangling-dns':  'btn-dangling',
     'shared-infra':  'btn-shared',
     'tech-exposure': 'btn-tech',
   };
