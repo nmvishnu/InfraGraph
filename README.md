@@ -4,9 +4,13 @@
 
 **Turn hours of manual grep/awk into instant visual attack-path queries.**
   
-[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev) [![Neo4j](https://img.shields.io/badge/Neo4j-5.x-4581C3?style=flat-square&logo=neo4j&logoColor=white)](https://neo4j.com) [![vis.js](https://img.shields.io/badge/vis.js-Network-f5a623?style=flat-square)](https://visjs.org) [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker&logoColor=white)](#-docker-one-command-setup) [![License](https://img.shields.io/badge/License-MIT-7c3aed?style=flat-square)](#license)
+[![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![Architecture](https://img.shields.io/badge/Binary-100%25%20Static%20Standalone-brightgreen?style=flat-square)](#-build-instructions)
+[![SQLite](https://img.shields.io/badge/SQLite-Pure--Go%20Embedded-003B57?style=flat-square&logo=sqlite&logoColor=white)](#-database-management)
+[![vis.js](https://img.shields.io/badge/vis.js-Network-f5a623?style=flat-square)](https://visjs.org)
+[![License](https://img.shields.io/badge/License-MIT-7c3aed?style=flat-square)](#license)
 
-InfraGraph is an **OSINT / Attack Surface Management** pipeline that ingests output from `subfinder`, `amass`, and `httpx`, builds a **relational graph** in Neo4j, and renders it as an interactive **vis.js** network - highlighting **dangling DNS**, **shared infrastructure**, and **technology exposure** in seconds.
+InfraGraph is an **OSINT / Attack Surface Management** pipeline that embeds `subfinder` and `httpx` directly into a single static binary (Linux & Windows), stores relationships in an **embedded SQLite** engine, and renders it as an interactive **vis.js** network — highlighting **shared infrastructure** and **technology exposure** with zero external dependencies.
 
 ---
 
@@ -19,14 +23,15 @@ InfraGraph is an **OSINT / Attack Surface Management** pipeline that ingests out
 - [The Problem](#-the-problem)
 - [Features](#-features)
 - [Demo](#-demo)
-- [Quick Start - Manual Install](#-quick-start--manual-install)
-- [Quick Start - Docker (One-Command Setup)](#-docker-one-command-setup)
+- [Quick Start](#-quick-start)
+- [Build Instructions (Linux & Windows)](#-build-instructions-linux--windows)
+- [Execution Prerequisites](#-execution-prerequisites)
 - [CLI Reference](#-cli-reference)
 - [Web UI Guide](#-web-ui-guide)
-- [Cypher Query Cookbook](#-cypher-query-cookbook)
 - [Database Management](#-database-management)
 - [Troubleshooting](#-troubleshooting)
 - [Security & Ethics](#-security--ethics)
+- [Target Users](#-target-users)
 - [License](#license)
 
 ---
@@ -37,7 +42,6 @@ Recon tools like Subfinder, Amass, and httpx output **flat text/JSON files**. Re
 
 ```
 mail.target.com   →  104.21.55.12
-old.target.com    →  s3-website.amazonaws.com    ← ⚠️ Dangling DNS - takeover candidate!
 api.target.com    →  104.21.55.12                ← 🔗 Shared infra with mail - origin leak!
 cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposure
 ```
@@ -50,14 +54,15 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 | Feature | Description |
 |---------|-------------|
-| 🔍 **Automated Recon** | Runs Subfinder + Amass concurrently, probes with httpx |
-| 🕸️ **Graph Correlation** | Builds a Neo4j graph connecting domains, IPs, CNAMEs, and technologies |
-| ⚠️ **Dangling DNS Detection** | Finds CNAME records pointing to cloud services that can be taken over |
-| 🔗 **Shared Infrastructure** | Discovers IPs serving multiple domains - origin server leaks |
-| ⚙️ **Technology Mapping** | Maps every domain to its detected tech stack (Nginx, React, etc.) |
-| 🌐 **Interactive Web UI** | Dark-mode vis.js graph with click-to-query, search, and hover tooltips |
-| 🐳 **Docker Support** | One-command deployment with all tools pre-installed |
-| 📊 **Multiple Output Modes** | Full scan, ingest-only, serve-only, fresh re-scan, full reset |
+| 🚀 **Single Executable** | Self-contained static binary. No Docker, Java, Neo4j, or external Go tool installations required |
+| 🔍 **In-Process Recon** | Runs Subfinder and probes with httpx directly within Go runtime |
+| ⚡ **Optional Amass** | Automatically detects and uses `amass-v4` if present in PATH; skips gracefully if missing |
+| 🕸️ **Graph Correlation** | Relational graph engine mapping domains, IPs, CNAMEs, and technologies |
+| 🔗 **Shared Infrastructure** | Discovers IPs serving multiple domains — origin server leaks & tenant co-location |
+| ⚙️ **Technology Mapping** | Maps every domain to its detected tech stack (Nginx, React, Cloudflare, etc.) |
+| 🌐 **Interactive Web UI** | Dark-mode vis.js graph with click-to-query, search, filter, and hover tooltips |
+| 🖥️ **Cross-Platform** | Same unified source code builds natively for both Linux and Windows |
+| 📊 **Multiple Output Modes** | Full scan, ingest-only, serve-only, fresh domain re-scan, full reset |
 
 ---
 
@@ -65,8 +70,6 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 > 🎥 **Demo Video**
 ![InfraGraph Demo](docs/demo/demo.gif)
-
-</div>
 
 <!-- ADDITIONAL SCREENSHOTS -->
 <details>
@@ -76,163 +79,153 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 > **Graph View** - Full attack surface visualization
 > ![Graph View](docs/screenshots/graph-view.png)
 > 
-> **Dangling DNS** - Subdomain takeover candidates highlighted
-> ![Dangling DNS](docs/screenshots/dangling-dns.png)
-> 
 > **Shared Infrastructure** - Origin server leak detection
 > ![Shared Infra](docs/screenshots/shared-infra.png)
 > 
 > **Technology Exposure** - Tech stack mapping per domain
 > ![Tech Exposure](docs/screenshots/tech-exposure.png)
 
-
 </details>
 
 ---
 
-## 🚀 Quick Start - Manual Install
+## 🚀 Quick Start
 
-### Prerequisites
-
-| Requirement | Version | Install |
-|------------|---------|---------|
-| **Go** | 1.26+ | [go.dev/dl](https://go.dev/dl/) |
-| **Neo4j** | 5.x Community | [neo4j.com/download](https://neo4j.com/download/) OR use the bundled `neo4j/` folder |
-| **Java** | 21+ | `sudo apt install openjdk-21-jre` (required by Neo4j) |
-| **Subfinder** | Latest | `go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest` |
-| **httpx** | Latest | `go install github.com/projectdiscovery/httpx/cmd/httpx@latest` |
-| **Amass** | v4.2.0+ | `sudo apt install amass` | [GitHub Releases](https://github.com/owasp-amass/amass/releases) (download pre-compiled binary, rename to `amass-v4`) |
-
-> [!NOTE]
-> On Kali Linux and some Debian systems, the system `httpx` package conflicts with the Go tool. InfraGraph handles this automatically by searching `~/go/bin/httpx` first, then falling back to `httpx-toolkit`.
-
-### Step 1 - Clone
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/nmvishnu/InfraGraph.git
 cd InfraGraph
 ```
 
-### Step 2 - Start Neo4j
+### 2. Build
 
 ```bash
-./scripts/neo4j.sh start
+# Build Linux static binary
+make static
+
+# Or cross-compile for Windows
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o build/infragraph.exe ./cmd/infragraph
 ```
 
-This exposes:
-- **Neo4j Browser:** http://localhost:7474
-- **Bolt URI:** `bolt://localhost:7687`
-- **Credentials:** `neo4j` / `infragraph`
+### 3. Run a Scan
 
-### Step 3 - Run a Scan
-
+**On Linux:**
 ```bash
-./build/infragraph -target <domain.com>
+./build/infragraph -target example.com
 ```
-To clear previous results, use the `-reset` flag or refer to the [CLI Reference](#cli-reference) section.
 
-### Step 4 - Explore the Graph
+**On Windows:**
+```powershell
+.\build\infragraph.exe -target example.com
+```
+
+### 4. Explore the Graph
 
 Open **http://localhost:8080** in your browser.
 
 ---
 
-## 🐳 Docker (One-Command Setup)
+## 🔨 Build Instructions (Linux & Windows)
 
-The Docker setup bundles **everything** - Go binary, Subfinder, httpx, Amass, and Neo4j - so you don't need to install anything except Docker.
+InfraGraph uses 100% pure Go (including embedded pure-Go SQLite and embedded static web assets). You can compile standalone binaries for Linux and Windows from any platform where Go 1.21+ is installed.
 
-### Build
-
-```bash
-./docker/run.sh build
-```
-### Start the full stack
+### 🐧 Building for Linux
 
 ```bash
-./docker/run.sh up
-# Web UI  → http://localhost:8080
-```
+# Fast build with Makefile
+make static
 
-### Run a Scan
+# Or directly with Go
+CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o build/infragraph ./cmd/infragraph
+```
+Output: `build/infragraph` (fully static ELF binary, zero libc dependencies).
+
+### 🪟 Building for Windows (`.exe`)
+
+You can cross-compile for Windows directly from Linux (or natively on Windows):
 
 ```bash
-./docker/run.sh scan example.com
+# Cross-compiling from Linux:
+GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o build/infragraph.exe ./cmd/infragraph
+
+# Or building natively on Windows (PowerShell / CMD):
+go build -trimpath -ldflags="-s -w" -o build/infragraph.exe ./cmd/infragraph
 ```
-
-### All Docker Commands
-
-| Command | Description |
-|---------|-------------|
-| `./docker/run.sh build` | Build the Docker image |
-| `./docker/run.sh up` | Start Neo4j + InfraGraph UI |
-| `./docker/run.sh scan <domain>` | Run a full scan |
-| `./docker/run.sh scan <domain> -timeout 5` | Scan with custom timeout |
-| `./docker/run.sh ingest` | Re-ingest existing output files |
-| `./docker/run.sh down` | Stop all containers |
-| `./docker/run.sh logs` | Follow container logs |
-| `./docker/run.sh status` | Show container status |
-| `./docker/run.sh clean` | Remove containers, volumes, and images |
-
-### Pinned Tool Versions (Docker)
-
-| Tool | Version |
-|------|---------|
-| Go | 1.26 |
-| Neo4j | 5.26.8 Community |
-| Subfinder | v2.14.0 |
-| httpx | v1.9.0 |
-| Amass | v4.2.0 |
-
-> [!TIP]
-> To use Subfinder API keys inside Docker, place your `provider-config.yaml` in `~/.config/subfinder/` before building. The build script copies it automatically.
+Output: `build/infragraph.exe` (standalone Windows console application).
 
 ---
 
-## CLI Reference
+## 💻 Execution Prerequisites
+
+Because InfraGraph compiles into a self-contained binary, running the tool requires almost no setup:
+
+| Platform | Requirements |
+|---|---|
+| **Linux** | Any 64-bit Linux distribution (`chmod +x infragraph`). Web browser for GUI. Internet access for recon. |
+| **Windows** | Windows 10/11 or Windows Server (64-bit). PowerShell or CMD. Web browser for GUI. Internet access for recon. |
+
+> [!NOTE]
+> **What you DO NOT need:**
+> - ❌ No Neo4j or Java runtime
+> - ❌ No Docker or Docker Compose
+> - ❌ No Subfinder or httpx CLI installations (embedded as Go libraries)
+> - ❌ No Visual C++ Redistributable or external DLLs
+
+---
+
+## ⌨️ CLI Reference
 
 ```
 Usage: infragraph [flags]
 
 Flags:
   -target string     Target domain to enumerate (e.g. example.com)
+  -db string         Path to SQLite database file (default: "./infragraph.db")
   -output string     Directory for raw JSON outputs (default: "output")
-  -neo4j  string     Neo4j bolt URI (default: "bolt://localhost:7687")
-  -user   string     Neo4j username (default: "neo4j")
-  -pass   string     Neo4j password (default: "infragraph")
   -listen string     API/UI server address (default: ":8080")
-  -web    string     Static web root directory (default: "web")
-  -timeout string    Amass timeout in minutes (default: "30")
+  -web string        Custom web root directory (uses embedded UI by default)
+  -timeout string    Recon timeout in minutes (default: "30")
 
 Modes:
-  -ingest-only       Skip recon, only ingest existing JSON files
+  -ingest-only       Skip recon, only ingest existing JSON files in -output dir
   -serve-only        Skip recon and ingestion, only serve the UI
 
 Data Management:
-  -fresh             Delete all nodes for -target before re-ingesting
-  -reset             Wipe the ENTIRE graph database before ingesting
+  -fresh             Delete existing nodes for -target before re-ingesting
+  -reset             Wipe the ENTIRE database before ingesting
 ```
 
 ### Usage Examples
 
+**Linux:**
 ```bash
 # Full scan against a target
-./build/infragraph -target hackerone.com
+./build/infragraph -target example.com
 
-# Quick scan with shorter Amass timeout (5 minutes)
-./build/infragraph -target example.com -timeout 5
-
-# Re-scan a target (wipe old data for this domain first)
+# Re-scan a target fresh (wipes old records for this target only)
 ./build/infragraph -target example.com -fresh
 
-# Nuclear option - wipe entire database and start fresh
-./build/infragraph -target example.com -reset
-
-# Re-ingest after manually editing output JSON files
-./build/infragraph -ingest-only -output ./output
-
-# Just view the existing graph (no scanning)
+# View existing graph without scanning
 ./build/infragraph -serve-only
 
+# Ingest existing JSON files without re-scanning
+./build/infragraph -ingest-only -output ./output
+
+# Reset entire database and start fresh
+./build/infragraph -target example.com -reset
+```
+
+**Windows (PowerShell / CMD):**
+```powershell
+# Full scan against a target
+.\build\infragraph.exe -target example.com
+
+# View existing graph without scanning
+.\build\infragraph.exe -serve-only
+
+# Reset entire database and scan fresh
+.\build\infragraph.exe -target example.com -reset
 ```
 
 ---
@@ -243,114 +236,46 @@ The web UI is accessible at **http://localhost:8080** after starting InfraGraph.
 
 ### Sidebar Query Buttons
 
-| Button | Query | What It Finds |
-|--------|-------|---------------|
-| 🌐 **Full Graph** | All nodes & edges | Complete attack surface visualization |
-| ⚠️ **Dangling DNS** | Orphaned CNAMEs | Subdomain takeover candidates pointing to unclaimed cloud resources |
-| 🔗 **Shared Infrastructure** | Multi-homed IPs | IPs serving multiple domains - origin server leaks |
-| ⚙️ **Technology Exposure** | Tech stack map | Domain → technology relationships (Nginx, React, WordPress, etc.) |
-| 🏠 **IP Addresses** | IP listing | All discovered IP addresses with ASN data |
+| Button | What It Finds |
+|--------|---------------|
+| 🌐 **Full Graph** | Complete attack surface — all discovered domains, IPs, CNAMEs, and technologies |
+| 🔗 **Shared Infrastructure** | IPs serving multiple domains — origin server leaks & shared hosting |
+| ⚙️ **Technology Exposure** | Domain → technology stack mapping (Nginx, React, Cloudflare, etc.) |
 
 ### Interaction
 
-- **Click** a node to highlight its connections
-- **Hover** over any node to see detailed properties in the tooltip
+- **Click** a node to highlight its direct connections
+- **Hover** over any node to view detailed metadata in the tooltip
 - **Scroll** to zoom in/out
-- **Drag** nodes to rearrange the layout
+- **Drag** nodes to reposition
 - **Search** by domain name using the search bar
-
----
-
-## 📊 Cypher Query Cookbook
-
-Run these directly in the **Neo4j Browser** at `http://localhost:7474`:
-
-<details>
-<summary><strong>⚠️ Dangling DNS - Subdomain Takeover Candidates</strong></summary>
-
-```cypher
-MATCH (d:Domain)-[:HAS_CNAME]->(c:CNAME)
-WHERE NOT (d)-[:RESOLVES_TO]->(:IP)
-  AND c.target =~ '.*(amazonaws\\.com|azure.*\\.net|cloudapp\\.net|herokuapp\\.com|github\\.io|shopify\\.com|fastly\\.net|pantheon\\.io|ghost\\.io|myshopify\\.com|zendesk\\.com|surge\\.sh|bitbucket\\.io|wordpress\\.com|smugmug\\.com|ghost\\.org|helpjuice\\.com|helpscoutdocs\\.com|s3\\.amazonaws\\.com|animaapp\\.io|readme\\.io|cargocollective\\.com|statuspage\\.io|tumblr\\.com|ghost\\.io|aha\\.io|brightcove\\.com|bigcartel\\.com|campaignmonitor\\.com|acquia-test\\.co|proposify\\.com|simplebooklet\\.com|getresponse\\.com|vend\\.com|aftership\\.com|freshdesk\\.com|helpjuice\\.com|helpscoutdocs\\.com|groove\\.hq|thinkific\\.com|teachable\\.com|tictail\\.com).*'
-RETURN d.name AS subdomain, c.target AS dangling_cname
-ORDER BY c.target
-```
-
-</details>
-
-<details>
-<summary><strong>🔗 Shared Infrastructure - Origin Server Leaks</strong></summary>
-
-```cypher
-MATCH (d1:Domain)-[:RESOLVES_TO]->(i:IP)<-[:RESOLVES_TO]-(d2:Domain)
-WHERE d1.name < d2.name
-RETURN d1.name AS domain_1, i.address AS shared_ip, d2.name AS domain_2
-ORDER BY i.address
-```
-
-</details>
-
-<details>
-<summary><strong>⚙️ Technology Fingerprinting</strong></summary>
-
-```cypher
-MATCH (d:Domain)-[:RUNS_ON]->(t:Technology)
-RETURN d.name AS domain, collect(t.name) AS tech_stack
-ORDER BY size(collect(t.name)) DESC
-```
-
-</details>
-
-<details>
-<summary><strong>📊 Attack Surface Summary</strong></summary>
-
-```cypher
-MATCH (n)
-RETURN labels(n)[0] AS node_type, count(n) AS count
-ORDER BY count DESC
-```
-
-</details>
-
-<details>
-<summary><strong>🔍 Find All Subdomains for a Specific IP</strong></summary>
-
-```cypher
-MATCH (d:Domain)-[:RESOLVES_TO]->(i:IP {address: '104.21.55.12'})
-RETURN d.name AS subdomain, d.url AS url, d.status_code AS status
-ORDER BY d.name
-```
-
-</details>
 
 ---
 
 ## 🗄️ Database Management
 
+InfraGraph stores all data in an embedded SQLite database (`infragraph.db` in the working directory).
+
 ### Reset Database (Wipe All Scan Data)
 
 ```bash
-# Option 1 - Using the helper script
-./scripts/neo4j.sh reset
+# Option 1 — Using CLI flag
+./build/infragraph -target example.com -reset
 
-# Option 2 - Manual reset
-./scripts/neo4j.sh stop          # or: pkill -f neo4j
-rm -rf neo4j/data/databases
-rm -rf neo4j/data/transactions
-neo4j/bin/neo4j-admin dbms set-initial-password infragraph
-./scripts/neo4j.sh start
+# Option 2 — Manual removal
+rm infragraph.db
 ```
 
-### Delete Only Raw Output Files
-
-```bash
-rm -rf output/
-```
-
-### Re-scan a Single Target (Keep Other Data)
+### Re-scan a Single Target (Preserves Other Targets)
 
 ```bash
 ./build/infragraph -target example.com -fresh
+```
+
+### Clean Raw Output Files
+
+```bash
+rm -rf output/
 ```
 
 ---
@@ -358,48 +283,25 @@ rm -rf output/
 ## 🔧 Troubleshooting
 
 <details>
-<summary><strong>Neo4j won't start - "Address already in use"</strong></summary>
-
-Another process is using port 7474 or 7687. Find and stop it:
-```bash
-sudo lsof -i :7474
-sudo lsof -i :7687
-# Then kill the process or stop the other Neo4j instance
-```
-
-</details>
-
-<details>
-<summary><strong>httpx not found / wrong httpx version</strong></summary>
-
-On some systems (especially Kali), the system `httpx` is a Python package, not the Go security tool. Install the correct one:
-```bash
-go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-```
-InfraGraph looks for `~/go/bin/httpx` first, then `httpx-toolkit`, then falls back to `httpx` in PATH.
-
-</details>
-
-<details>
-<summary><strong>Docker build fails with "stream error" or "INTERNAL_ERROR"</strong></summary>
-
-This is a transient network error from the Go module proxy. The Docker image now downloads **pre-compiled binaries** instead of compiling from source, which avoids this issue. Make sure you're using the latest Dockerfile.
-
-</details>
-
-<details>
 <summary><strong>"0 IPs found" or empty graph</strong></summary>
 
-- Verify Neo4j is running: `./scripts/neo4j.sh status`
 - Check that output files exist and contain data: `ls -la output/`
-- Try re-ingesting: `make ingest`
+- Check database status: `ls -la infragraph.db`
+- Try re-ingesting saved files: `./build/infragraph -ingest-only`
 
 </details>
 
 <details>
 <summary><strong>UI loads but graph is empty</strong></summary>
 
-Click the **"Full Graph"** button in the sidebar. The graph doesn't auto-load to prevent accidental queries on large datasets.
+Click the **"Full Graph"** button in the sidebar. The graph doesn't auto-load immediately to prevent accidental heavy rendering on large datasets.
+
+</details>
+
+<details>
+<summary><strong>Windows Firewall prompt on first run</strong></summary>
+
+When running `infragraph.exe` on Windows for the first time, Windows Defender Firewall may ask for permission. Click **"Allow access"** so the local UI server can accept connections from your browser on port 8080.
 
 </details>
 
@@ -411,8 +313,7 @@ Click the **"Full Graph"** button in the sidebar. The graph doesn't auto-load to
 > Only scan domains you **own** or have **explicit written permission** to test.
 
 - Respect bug bounty program scope definitions
-- Output files in `output/` may contain sensitive infrastructure data - treat accordingly
-- The Neo4j database stores a complete map of discovered assets - secure access appropriately
+- Output files in `output/` and `infragraph.db` may contain sensitive infrastructure data — treat accordingly
 - API keys stored in `~/.config/subfinder/provider-config.yaml` are sensitive credentials
 
 ---
@@ -422,7 +323,7 @@ Click the **"Full Graph"** button in the sidebar. The graph doesn't auto-load to
 | Audience | Use Case |
 |----------|----------|
 | 🔴 **Red Teams** | Map client external attack surfaces before engagements |
-| 🐛 **Bug Bounty Hunters** | Find takeover targets and hidden origin servers fast |
+| 🐛 **Bug Bounty Hunters** | Find hidden origin servers and multi-homed infrastructure fast |
 | 🏢 **ASM Engineers** | Continuous visibility into forgotten external assets |
 | 🎓 **Security Researchers** | Graph-based analysis of internet infrastructure |
 
@@ -436,8 +337,8 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 
 <div align="center">
 
-**Built with ❤️ using Go, Neo4j, and vis.js**
+**Built with ❤️ using Go, Embedded SQLite, and vis.js**
 
-[⬆ Back to Top](#️-infragraph--attack-surface-graph-correlator)
+[⬆ Back to Top](#️-infragraph---attack-surface-graph-correlator)
 
 </div>
