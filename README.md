@@ -91,15 +91,18 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 ## 🚀 Installation
 
-Pre-compiled, self-contained standalone binaries for **Linux** and **Windows** are available on the GitHub Releases page:
+### Step 1 — Download the Binary
+Download the latest release for your operating system from the **[Releases Page](https://github.com/nmvishnu/InfraGraph/releases)**:
+- **Linux:** `infragraph`
+- **Windows:** `infragraph.exe`
 
-👉 **[Download Latest Release](https://github.com/nmvishnu/InfraGraph/releases)**
+### Step 2 — Make Executable (Linux only)
+If running on Linux, grant execute permissions to the downloaded binary:
+```bash
+chmod +x infragraph
+```
 
-1. Download the binary for your operating system:
-   - **Linux:** `infragraph` (make it executable: `chmod +x infragraph`)
-   - **Windows:** `infragraph.exe`
-2. No dependencies, databases, or installers are required.
-3. Run directly from your terminal:
+### Step 3 — Run the Tool
 
 **Linux:**
 ```bash
@@ -111,7 +114,10 @@ Pre-compiled, self-contained standalone binaries for **Linux** and **Windows** a
 .\infragraph.exe -target example.com
 ```
 
-4. Open **http://localhost:8080** in your browser to explore the graph.
+Then open **http://localhost:8080** in your browser to view the graph.
+
+> [!NOTE]
+> On Windows, you may need to allow the Windows Firewall prompt when prompted to permit opening a local port (`:8080`) to serve the results in your browser.
 
 ---
 
