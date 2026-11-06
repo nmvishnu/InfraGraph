@@ -23,8 +23,8 @@ InfraGraph is an **OSINT / Attack Surface Management** pipeline that embeds `sub
 - [The Problem](#-the-problem)
 - [Features](#-features)
 - [Demo](#-demo)
-- [Quick Start](#-quick-start)
-- [Build Instructions (Linux & Windows)](#-build-instructions-linux--windows)
+- [Installation](#-installation)
+- [Building from Source](#-building-from-source)
 - [Execution Prerequisites](#-execution-prerequisites)
 - [CLI Reference](#-cli-reference)
 - [Web UI Guide](#-web-ui-guide)
@@ -89,7 +89,45 @@ cdn.target.com    →  Cloudflare (Wappalyzer)     ← ⚙️ Technology exposur
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Installation
+
+Pre-compiled, self-contained standalone binaries for **Linux** and **Windows** are available on the GitHub Releases page:
+
+👉 **[Download Latest Release](https://github.com/nmvishnu/InfraGraph/releases)**
+
+1. Download the binary for your operating system:
+   - **Linux:** `infragraph` (make it executable: `chmod +x infragraph`)
+   - **Windows:** `infragraph.exe`
+2. No dependencies, databases, or installers are required.
+3. Run directly from your terminal:
+
+**Linux:**
+```bash
+./infragraph -target example.com
+```
+
+**Windows (PowerShell / CMD):**
+```powershell
+.\infragraph.exe -target example.com
+```
+
+4. Open **http://localhost:8080** in your browser to explore the graph.
+
+---
+
+## 🔨 Building from Source
+
+If you prefer to compile from source rather than using the pre-built releases, follow the steps below.
+
+### Build Prerequisites
+
+| Requirement | Details |
+|---|---|
+| **Go** | Version **1.21+** installed ([go.dev/dl](https://go.dev/dl/)) |
+| **Git** | For cloning the repository |
+
+> [!NOTE]
+> No C compiler (GCC/Clang), CGO, Java, Docker, or external tools are required to build. All database engines (SQLite) and recon modules (Subfinder, httpx) are written in pure Go.
 
 ### 1. Clone the Repository
 
@@ -98,58 +136,28 @@ git clone https://github.com/nmvishnu/InfraGraph.git
 cd InfraGraph
 ```
 
-### 2. Build
+### 2. Build Steps
+
+#### 🐧 Building for Linux
 
 ```bash
-# Build Linux static binary
-make static
-
-# Or cross-compile for Windows
-GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o build/infragraph.exe ./cmd/infragraph
-```
-
-### 3. Run a Scan
-
-**On Linux:**
-```bash
-./build/infragraph -target example.com
-```
-
-**On Windows:**
-```powershell
-.\build\infragraph.exe -target example.com
-```
-
-### 4. Explore the Graph
-
-Open **http://localhost:8080** in your browser.
-
----
-
-## 🔨 Build Instructions (Linux & Windows)
-
-InfraGraph uses 100% pure Go (including embedded pure-Go SQLite and embedded static web assets). You can compile standalone binaries for Linux and Windows from any platform where Go 1.21+ is installed.
-
-### 🐧 Building for Linux
-
-```bash
-# Fast build with Makefile
+# Using Makefile
 make static
 
 # Or directly with Go
 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o build/infragraph ./cmd/infragraph
 ```
-Output: `build/infragraph` (fully static ELF binary, zero libc dependencies).
+Output: `build/infragraph` (fully static ELF binary, zero libc/dynamic dependencies).
 
-### 🪟 Building for Windows (`.exe`)
+#### 🪟 Building for Windows (`.exe`)
 
-You can cross-compile for Windows directly from Linux (or natively on Windows):
+You can compile natively on Windows or cross-compile directly from Linux with zero extra tooling:
 
 ```bash
 # Cross-compiling from Linux:
 GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o build/infragraph.exe ./cmd/infragraph
 
-# Or building natively on Windows (PowerShell / CMD):
+# Building natively on Windows (PowerShell / CMD):
 go build -trimpath -ldflags="-s -w" -o build/infragraph.exe ./cmd/infragraph
 ```
 Output: `build/infragraph.exe` (standalone Windows console application).
