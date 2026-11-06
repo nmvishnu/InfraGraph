@@ -16,19 +16,13 @@ import (
 
 // Server is the InfraGraph HTTP API and static file server.
 type Server struct {
-	client *graph.Client
-	fileFS http.FileSystem // embedded or disk-based filesystem
+	client  *graph.Client
+	webRoot string
 }
 
-// NewServer creates a new API server backed by the provided graph client.
-// webFS is the filesystem to serve static files from (can be embed.FS or os directory).
-func NewServer(client *graph.Client, webFS http.FileSystem) *Server {
-	return &Server{client: client, fileFS: webFS}
-}
-
-// NewServerFromDir creates a server using a directory path for static files (legacy mode).
-func NewServerFromDir(client *graph.Client, webRoot string) *Server {
-	return &Server{client: client, fileFS: http.Dir(webRoot)}
+// NewServer creates a new API server backed by the provided Neo4j client.
+func NewServer(client *graph.Client, webRoot string) *Server {
+	return &Server{client: client, webRoot: webRoot}
 }
 
 // Start registers routes and begins listening on addr (e.g. ":8080").
@@ -43,8 +37,9 @@ func (s *Server) Start(addr string) error {
 	mux.HandleFunc("/api/stats", s.handleStats)
 	mux.HandleFunc("/api/health", s.handleHealth) // diagnostic endpoint
 
-	// Static frontend files (from embedded FS or disk)
-	mux.Handle("/", http.FileServer(s.fileFS))
+	// Static frontend files
+	fs := http.FileServer(http.Dir(s.webRoot))
+	mux.Handle("/", http.StripPrefix("/", fs))
 
 	log.Printf("[api] InfraGraph UI → http://localhost%s", addr)
 	srv := &http.Server{
@@ -162,11 +157,10 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 // handleHealth runs each Cypher query and reports OK / error for each.
 // Hit /api/health to diagnose "Query not defined" and similar errors.
 type healthResult struct {
-	Database     string `json:"database"`
-	Neo4j        string `json:"neo4j,omitempty"`
-	FullGraph    string `json:"full_graph"`
-	DanglingDNS  string `json:"dangling_dns"`
-	SharedInfra  string `json:"shared_infra"`
+	Neo4j       string `json:"neo4j"`
+	FullGraph   string `json:"full_graph"`
+	DanglingDNS string `json:"dangling_dns"`
+	SharedInfra string `json:"shared_infra"`
 	TechExposure string `json:"tech_exposure"`
 }
 
@@ -177,11 +171,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	res := healthResult{}
 
 	if err := s.client.Verify(ctx); err != nil {
-		res.Database = "error: " + err.Error()
-		res.Neo4j = res.Database
+		res.Neo4j = "error: " + err.Error()
 	} else {
-		res.Database = "ok"
-		res.Neo4j = "ok (sqlite)"
+		res.Neo4j = "ok"
 	}
 
 	if _, err := graph.GetFullGraph(ctx, s.client, 5); err != nil {

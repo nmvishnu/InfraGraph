@@ -1,0 +1,63 @@
+# ============================================================================
+#  InfraGraph ASM — Docker Compose (Full Stack)
+#  Launches Neo4j + InfraGraph app as a single deployable unit
+# ============================================================================
+
+services:
+
+  # ── Neo4j Graph Database ─────────────────────────────────────────────────
+  neo4j:
+    image: neo4j:5.26.8-community
+    container_name: infragraph-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"       # Neo4j Browser UI
+      - "7687:7687"       # Bolt protocol
+    environment:
+      NEO4J_AUTH: neo4j/infragraph
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*"
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:7474"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - infragraph-net
+
+  # ── InfraGraph Application ───────────────────────────────────────────────
+  infragraph:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: infragraph-app
+    restart: unless-stopped
+    ports:
+      - "8080:8080"       # Web UI + API
+    environment:
+      # Override Neo4j connection (container-to-container via service name)
+      NEO4J_URI:  "bolt://neo4j:7687"
+      NEO4J_USER: "neo4j"
+      NEO4J_PASS: "infragraph"
+    volumes:
+      # Persist scan output between runs
+      - infragraph_output:/app/output
+      # Mount subfinder API keys config (optional — place your config here)
+      - ./subfinder-config:/home/infragraph/.config/subfinder:ro
+    depends_on:
+      neo4j:
+        condition: service_healthy
+    networks:
+      - infragraph-net
+
+volumes:
+  neo4j_data:
+  neo4j_logs:
+  infragraph_output:
+
+networks:
+  infragraph-net:
+    driver: bridge

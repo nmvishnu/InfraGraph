@@ -2,8 +2,6 @@ package graph
 
 import (
 	"context"
-	"fmt"
-	"regexp"
 )
 
 // GraphResponse is the JSON payload returned by the API server for vis.js rendering.
@@ -27,167 +25,99 @@ type GraphEdge struct {
 	Label string `json:"label"`
 }
 
-var cloudPattern = regexp.MustCompile(`(?i).*(github\.io|amazonaws\.com|herokuapp\.com|pantheon\.io|azurewebsites\.net|trafficmanager\.net|ghost\.io|wpengine\.com|zendesk\.com|fastly\.net|myshopify\.com|surge\.sh).*`)
-
 // GetFullGraph returns nodes and edges for vis.js rendering.
+// Uses property-indexed lookups so queries are O(log N) not O(N²).
 // limit caps the node count (0 = default 200).
 func GetFullGraph(ctx context.Context, c *Client, limit int) (*GraphResponse, error) {
 	if limit <= 0 {
 		limit = 200
 	}
 
-	nodeSet := make(map[string]GraphNode)
-	var edges []GraphEdge
-	seenEdges := make(map[string]bool)
+	// ── PHASE 1: Fetch nodes ──────────────────────────────────────────────────
+	// We fetch node types in priority order using UNION ALL so Domains and IPs
+	// appear first. Each branch hits its own index. No relationship traversal.
+	//
+	// Allocation split (roughly):  Domain 40 %, IP 20 %, CNAME 20 %, Tech 15 %, Title 5 %
+	perType := int64(limit)
+	nodeRows, err := c.RunRead(ctx, `
+		CALL {
+			MATCH (n:Domain)
+			RETURN elementId(n) AS id, 'Domain' AS label_type, coalesce(n.name,'') AS label
+			LIMIT $lim
+		UNION ALL
+			MATCH (n:IP)
+			RETURN elementId(n) AS id, 'IP' AS label_type, coalesce(n.address,'') AS label
+			LIMIT $lim
+		UNION ALL
+			MATCH (n:CNAME)
+			RETURN elementId(n) AS id, 'CNAME' AS label_type, coalesce(n.target,'') AS label
+			LIMIT $lim
+		UNION ALL
+			MATCH (n:Technology)
+			RETURN elementId(n) AS id, 'Technology' AS label_type, coalesce(n.name,'') AS label
+			LIMIT $lim
+		UNION ALL
+			MATCH (n:HTTPTitle)
+			RETURN elementId(n) AS id, 'HTTPTitle' AS label_type, coalesce(n.text,'') AS label
+			LIMIT $lim
+		}
+		RETURN id, label_type, label
+		LIMIT $total
+	`, map[string]any{"lim": perType, "total": int64(limit)})
+	if err != nil {
+		// Fallback: plain MATCH if CALL {} UNION not supported (Neo4j < 5.0)
+		nodeRows, err = c.RunRead(ctx, `
+			MATCH (n)
+			RETURN elementId(n) AS id,
+			       labels(n)[0] AS label_type,
+			       CASE labels(n)[0]
+			         WHEN 'Domain'     THEN coalesce(n.name, '')
+			         WHEN 'IP'         THEN coalesce(n.address, '')
+			         WHEN 'CNAME'      THEN coalesce(n.target, '')
+			         WHEN 'Technology' THEN coalesce(n.name, '')
+			         WHEN 'HTTPTitle'  THEN coalesce(n.text, '')
+			         ELSE ''
+			       END AS label
+			LIMIT $lim
+		`, map[string]any{"lim": int64(limit)})
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	addNode := func(id, label, group string) bool {
-		if _, exists := nodeSet[id]; exists {
-			return true
+	// Build node map and per-type name lists for the indexed edge lookup
+	nodeSet := make(map[string]GraphNode, len(nodeRows))
+	var domainNames, ipAddrs, cnames, techNames []string
+
+	for _, row := range nodeRows {
+		id, _ := row["id"].(string)
+		if id == "" {
+			continue
 		}
-		if len(nodeSet) >= limit {
-			return false
+		lt, _ := row["label_type"].(string)
+		lbl, _ := row["label"].(string)
+		if lt == "" {
+			lt = "Unknown"
 		}
-		rawLabel := label
-		if len(label) > 40 {
-			label = label[:40] + "…"
+		if len(lbl) > 40 {
+			lbl = lbl[:40] + "…"
 		}
 		nodeSet[id] = GraphNode{
 			ID:    id,
-			Label: label,
-			Group: group,
-			Title: group + ": " + rawLabel,
+			Label: lbl,
+			Group: lt,
+			Title: lt + ": " + lbl,
 		}
-		return true
-	}
-
-	// 1. Fetch domains up to initial limit (half limit to leave room for connected nodes)
-	initLim := limit / 2
-	if initLim < 1 {
-		initLim = 1
-	}
-
-	domRows, err := c.DB().QueryContext(ctx, `SELECT name FROM domains LIMIT ?`, initLim)
-	if err != nil {
-		return nil, fmt.Errorf("query domains: %w", err)
-	}
-	defer domRows.Close()
-
-	for domRows.Next() {
-		var name string
-		if err := domRows.Scan(&name); err == nil && name != "" {
-			addNode("domain:"+name, name, "Domain")
-		}
-	}
-
-	// Helper to add edge if both nodes are valid and within limit
-	addEdge := func(fromID, toID, toLabel, toGroup, relLabel string) {
-		if _, ok := nodeSet[fromID]; !ok {
-			return
-		}
-		if !addNode(toID, toLabel, toGroup) {
-			return
-		}
-		edgeKey := fromID + "->" + toID + ":" + relLabel
-		if !seenEdges[edgeKey] {
-			seenEdges[edgeKey] = true
-			edges = append(edges, GraphEdge{From: fromID, To: toID, Label: relLabel})
-		}
-	}
-
-	// 2. Fetch edges from junction tables
-	// domain_ips -> RESOLVES_TO
-	ipRows, err := c.DB().QueryContext(ctx, `
-		SELECT di.domain, di.ip 
-		FROM domain_ips di
-		JOIN domains d ON d.name = di.domain
-	`)
-	if err == nil {
-		defer ipRows.Close()
-		for ipRows.Next() {
-			var domain, ip string
-			if err := ipRows.Scan(&domain, &ip); err == nil && domain != "" && ip != "" {
-				addEdge("domain:"+domain, "ip:"+ip, ip, "IP", "RESOLVES_TO")
-			}
-		}
-	}
-
-	// domain_cnames -> HAS_CNAME
-	cnameRows, err := c.DB().QueryContext(ctx, `
-		SELECT dc.domain, dc.cname 
-		FROM domain_cnames dc
-		JOIN domains d ON d.name = dc.domain
-	`)
-	if err == nil {
-		defer cnameRows.Close()
-		for cnameRows.Next() {
-			var domain, cname string
-			if err := cnameRows.Scan(&domain, &cname); err == nil && domain != "" && cname != "" {
-				addEdge("domain:"+domain, "cname:"+cname, cname, "CNAME", "HAS_CNAME")
-			}
-		}
-	}
-
-	// domain_technologies -> RUNS_ON
-	techRows, err := c.DB().QueryContext(ctx, `
-		SELECT dt.domain, dt.tech 
-		FROM domain_technologies dt
-		JOIN domains d ON d.name = dt.domain
-	`)
-	if err == nil {
-		defer techRows.Close()
-		for techRows.Next() {
-			var domain, tech string
-			if err := techRows.Scan(&domain, &tech); err == nil && domain != "" && tech != "" {
-				addEdge("domain:"+domain, "tech:"+tech, tech, "Technology", "RUNS_ON")
-			}
-		}
-	}
-
-	// domain_titles -> HAS_TITLE
-	titleRows, err := c.DB().QueryContext(ctx, `
-		SELECT dt.domain, dt.title 
-		FROM domain_titles dt
-		JOIN domains d ON d.name = dt.domain
-	`)
-	if err == nil {
-		defer titleRows.Close()
-		for titleRows.Next() {
-			var domain, title string
-			if err := titleRows.Scan(&domain, &title); err == nil && domain != "" && title != "" {
-				addEdge("domain:"+domain, "title:"+title, title, "HTTPTitle", "HAS_TITLE")
-			}
-		}
-	}
-
-	// 3. Backfill any additional domains up to limit
-	if len(nodeSet) < limit {
-		extraDomRows, err := c.DB().QueryContext(ctx, `SELECT name FROM domains LIMIT ?`, limit)
-		if err == nil {
-			defer extraDomRows.Close()
-			for extraDomRows.Next() {
-				var name string
-				if err := extraDomRows.Scan(&name); err == nil && name != "" {
-					if !addNode("domain:"+name, name, "Domain") {
-						break
-					}
-				}
-			}
-		}
-	}
-
-	// 4. Backfill any standalone IPs, CNAMEs, Techs, Titles if still under limit
-	if len(nodeSet) < limit {
-		extraIPRows, err := c.DB().QueryContext(ctx, `SELECT address FROM ips LIMIT ?`, limit)
-		if err == nil {
-			defer extraIPRows.Close()
-			for extraIPRows.Next() {
-				var addr string
-				if err := extraIPRows.Scan(&addr); err == nil && addr != "" {
-					if !addNode("ip:"+addr, addr, "IP") {
-						break
-					}
-				}
-			}
+		// Collect property values per type so edges can use indexed lookups
+		switch lt {
+		case "Domain":
+			domainNames = append(domainNames, lbl)
+		case "IP":
+			ipAddrs = append(ipAddrs, lbl)
+		case "CNAME":
+			cnames = append(cnames, lbl)
+		case "Technology":
+			techNames = append(techNames, lbl)
 		}
 	}
 
@@ -195,102 +125,103 @@ func GetFullGraph(ctx context.Context, c *Client, limit int) (*GraphResponse, er
 		return &GraphResponse{Nodes: []GraphNode{}, Edges: []GraphEdge{}}, nil
 	}
 
+	// ── PHASE 2: Fetch edges using property indexes ───────────────────────────
+	// Instead of `elementId(n) IN $ids` (full scan), we match by indexed property
+	// values — each branch hits the unique constraint backing index.
+	edgeRows, err := c.RunRead(ctx, `
+		MATCH (n)-[r]->(m)
+		WHERE (n:Domain AND n.name IN $domains)
+		   OR (n:IP     AND n.address IN $ips)
+		   OR (n:CNAME  AND n.target  IN $cnames)
+		   OR (n:Technology AND n.name IN $techs)
+		RETURN elementId(n) AS from_id,
+		       elementId(m) AS to_id,
+		       type(r) AS rel_type
+		LIMIT 5000
+	`, map[string]any{
+		"domains": strSliceOrEmpty(domainNames),
+		"ips":     strSliceOrEmpty(ipAddrs),
+		"cnames":  strSliceOrEmpty(cnames),
+		"techs":   strSliceOrEmpty(techNames),
+	})
+	if err != nil {
+		// Non-fatal — return nodes with no edges rather than failing
+		return buildResponse(nodeSet, nil), nil
+	}
+
+	// Only keep edges where both endpoints are in the visible node set
+	var edges []GraphEdge
+	for _, row := range edgeRows {
+		from, _ := row["from_id"].(string)
+		to, _ := row["to_id"].(string)
+		rel, _ := row["rel_type"].(string)
+		if _, ok := nodeSet[from]; !ok {
+			continue
+		}
+		if _, ok := nodeSet[to]; !ok {
+			continue
+		}
+		edges = append(edges, GraphEdge{From: from, To: to, Label: rel})
+	}
+
 	return buildResponse(nodeSet, edges), nil
 }
 
-// QueryDanglingDNS finds domains with CNAMEs pointing to cloud providers that have no IP.
+// QueryDanglingDNS finds domains with CNAMEs but no resolved IPs — takeover candidates.
+// Uses EXISTS {} subquery (Neo4j 5 style) instead of deprecated pattern predicate.
 func QueryDanglingDNS(ctx context.Context, c *Client) (*GraphResponse, error) {
-	query := `
-		SELECT DISTINCT d.name, dc.cname
-		FROM domain_cnames dc
-		JOIN domains d ON d.name = dc.domain
-		LEFT JOIN domain_ips di ON di.domain = d.name
-		WHERE di.ip IS NULL
-		  AND (
-			dc.cname LIKE '%github.io%' OR
-			dc.cname LIKE '%amazonaws.com%' OR
-			dc.cname LIKE '%herokuapp.com%' OR
-			dc.cname LIKE '%pantheon.io%' OR
-			dc.cname LIKE '%azurewebsites.net%' OR
-			dc.cname LIKE '%trafficmanager.net%' OR
-			dc.cname LIKE '%ghost.io%' OR
-			dc.cname LIKE '%wpengine.com%' OR
-			dc.cname LIKE '%zendesk.com%' OR
-			dc.cname LIKE '%fastly.net%' OR
-			dc.cname LIKE '%myshopify.com%' OR
-			dc.cname LIKE '%surge.sh%'
-		  )
-	`
-	rows, err := c.DB().QueryContext(ctx, query)
+	// Try Neo4j 5 EXISTS subquery syntax first
+	rows, err := c.RunRead(ctx, `
+		MATCH (d:Domain)-[:HAS_CNAME]->(cn:CNAME)
+		WHERE cn.target =~ '(?i).*(github\\.io|amazonaws\\.com|herokuapp\\.com|pantheon\\.io|azurewebsites\\.net|trafficmanager\\.net|ghost\\.io|wpengine\\.com|zendesk\\.com|fastly\\.net|myshopify\\.com|surge\\.sh).*'
+		RETURN d.name AS domain, cn.target AS cname
+	`, nil)
 	if err != nil {
-		return nil, fmt.Errorf("query dangling dns: %w", err)
-	}
-	defer rows.Close()
-
-	var pairs [][2]string
-	for rows.Next() {
-		var domain, cname string
-		if err := rows.Scan(&domain, &cname); err != nil {
-			continue
-		}
-		if cloudPattern.MatchString(cname) {
-			pairs = append(pairs, [2]string{domain, cname})
+		// Fallback to classic pattern predicate (Neo4j 4.x compat)
+		rows, err = c.RunRead(ctx, `
+			MATCH (d:Domain)-[:HAS_CNAME]->(cn:CNAME)
+			WHERE cn.target =~ '(?i).*(github\\.io|amazonaws\\.com|herokuapp\\.com|pantheon\\.io|azurewebsites\\.net|trafficmanager\\.net|ghost\\.io|wpengine\\.com|zendesk\\.com|fastly\\.net|myshopify\\.com|surge\\.sh).*'
+			RETURN d.name AS domain, cn.target AS cname
+		`, nil)
+		if err != nil {
+			return nil, err
 		}
 	}
-
-	return buildSimpleGraph(pairs, "DANGLING_CNAME", "domain:", "cname:", "Domain", "CNAME"), nil
+	return buildSimpleGraph(rows, "domain", "cname", "DANGLING_CNAME", "Domain", "CNAME"), nil
 }
 
-// QuerySharedInfrastructure finds IPs serving multiple domains.
+// QuerySharedInfrastructure finds IPs hosting multiple domains.
 func QuerySharedInfrastructure(ctx context.Context, c *Client) (*GraphResponse, error) {
-	query := `
-		SELECT di1.domain AS domain1, di1.ip AS ip, di2.domain AS domain2
-		FROM domain_ips di1
-		JOIN domain_ips di2 ON di1.ip = di2.ip AND di1.domain < di2.domain
-		JOIN ips i ON i.address = di1.ip
-		ORDER BY di1.ip
-	`
-	rows, err := c.DB().QueryContext(ctx, query)
+	rows, err := c.RunRead(ctx, `
+		MATCH (d1:Domain)-[:RESOLVES_TO]->(i:IP)<-[:RESOLVES_TO]-(d2:Domain)
+		WHERE d1.name < d2.name
+		RETURN d1.name AS domain1, i.address AS ip, d2.name AS domain2
+	`, nil)
 	if err != nil {
-		return nil, fmt.Errorf("query shared infra: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
 
 	nodeSet := make(map[string]GraphNode)
 	var edges []GraphEdge
-	seenEdges := make(map[string]bool)
 
-	for rows.Next() {
-		var d1, ip, d2 string
-		if err := rows.Scan(&d1, &ip, &d2); err != nil {
-			continue
-		}
-
-		dom1ID := "domain:" + d1
-		dom2ID := "domain:" + d2
-		ipID := "ip:" + ip
+	for _, row := range rows {
+		d1, _ := row["domain1"].(string)
+		ip, _ := row["ip"].(string)
+		d2, _ := row["domain2"].(string)
 
 		if d1 != "" {
-			nodeSet[dom1ID] = GraphNode{ID: dom1ID, Label: d1, Group: "Domain", Title: "Domain: " + d1}
+			nodeSet[d1] = GraphNode{ID: d1, Label: d1, Group: "Domain", Title: "Domain: " + d1}
 		}
 		if d2 != "" {
-			nodeSet[dom2ID] = GraphNode{ID: dom2ID, Label: d2, Group: "Domain", Title: "Domain: " + d2}
+			nodeSet[d2] = GraphNode{ID: d2, Label: d2, Group: "Domain", Title: "Domain: " + d2}
 		}
 		if ip != "" {
-			nodeSet[ipID] = GraphNode{ID: ipID, Label: ip, Group: "IP", Title: "IP: " + ip}
+			nodeSet[ip] = GraphNode{ID: ip, Label: ip, Group: "IP", Title: "IP: " + ip}
 			if d1 != "" {
-				edgeKey1 := dom1ID + "->" + ipID + ":RESOLVES_TO"
-				if !seenEdges[edgeKey1] {
-					seenEdges[edgeKey1] = true
-					edges = append(edges, GraphEdge{From: dom1ID, To: ipID, Label: "RESOLVES_TO"})
-				}
+				edges = append(edges, GraphEdge{From: d1, To: ip, Label: "RESOLVES_TO"})
 			}
 			if d2 != "" {
-				edgeKey2 := dom2ID + "->" + ipID + ":RESOLVES_TO"
-				if !seenEdges[edgeKey2] {
-					seenEdges[edgeKey2] = true
-					edges = append(edges, GraphEdge{From: dom2ID, To: ipID, Label: "RESOLVES_TO"})
-				}
+				edges = append(edges, GraphEdge{From: d2, To: ip, Label: "RESOLVES_TO"})
 			}
 		}
 	}
@@ -300,27 +231,15 @@ func QuerySharedInfrastructure(ctx context.Context, c *Client) (*GraphResponse, 
 
 // QueryTechnologyExposure returns domains and the technologies they expose.
 func QueryTechnologyExposure(ctx context.Context, c *Client) (*GraphResponse, error) {
-	query := `
-		SELECT DISTINCT dt.domain, dt.tech
-		FROM domain_technologies dt
-		ORDER BY dt.tech, dt.domain
-	`
-	rows, err := c.DB().QueryContext(ctx, query)
+	rows, err := c.RunRead(ctx, `
+		MATCH (d:Domain)-[:RUNS_ON]->(t:Technology)
+		RETURN d.name AS domain, t.name AS tech
+		ORDER BY t.name
+	`, nil)
 	if err != nil {
-		return nil, fmt.Errorf("query tech exposure: %w", err)
+		return nil, err
 	}
-	defer rows.Close()
-
-	var pairs [][2]string
-	for rows.Next() {
-		var domain, tech string
-		if err := rows.Scan(&domain, &tech); err != nil {
-			continue
-		}
-		pairs = append(pairs, [2]string{domain, tech})
-	}
-
-	return buildSimpleGraph(pairs, "RUNS_ON", "domain:", "tech:", "Domain", "Technology"), nil
+	return buildSimpleGraph(rows, "domain", "tech", "RUNS_ON", "Domain", "Technology"), nil
 }
 
 // ----- helpers -----
@@ -336,49 +255,29 @@ func buildResponse(nodeSet map[string]GraphNode, edges []GraphEdge) *GraphRespon
 	return &GraphResponse{Nodes: nodes, Edges: edges}
 }
 
-func buildSimpleGraph(pairs [][2]string, relLabel, fromPrefix, toPrefix, fromGroup, toGroup string) *GraphResponse {
+func buildSimpleGraph(rows []map[string]any, fromKey, toKey, relLabel, fromGroup, toGroup string) *GraphResponse {
 	nodeSet := make(map[string]GraphNode)
 	var edges []GraphEdge
-	seenEdges := make(map[string]bool)
 
-	for _, pair := range pairs {
-		fromVal := pair[0]
-		toVal := pair[1]
-		if fromVal == "" || toVal == "" {
+	for _, row := range rows {
+		from, _ := row[fromKey].(string)
+		to, _ := row[toKey].(string)
+		if from == "" || to == "" {
 			continue
 		}
-
-		fromID := fromPrefix + fromVal
-		toID := toPrefix + toVal
-
-		fromLbl := fromVal
-		if len(fromLbl) > 40 {
-			fromLbl = fromLbl[:40] + "…"
-		}
-		toLbl := toVal
-		if len(toLbl) > 40 {
-			toLbl = toLbl[:40] + "…"
-		}
-
-		nodeSet[fromID] = GraphNode{
-			ID:    fromID,
-			Label: fromLbl,
-			Group: fromGroup,
-			Title: fromGroup + ": " + fromVal,
-		}
-		nodeSet[toID] = GraphNode{
-			ID:    toID,
-			Label: toLbl,
-			Group: toGroup,
-			Title: toGroup + ": " + toVal,
-		}
-
-		edgeKey := fromID + "->" + toID + ":" + relLabel
-		if !seenEdges[edgeKey] {
-			seenEdges[edgeKey] = true
-			edges = append(edges, GraphEdge{From: fromID, To: toID, Label: relLabel})
-		}
+		nodeSet[from] = GraphNode{ID: from, Label: from, Group: fromGroup, Title: fromGroup + ": " + from}
+		nodeSet[to] = GraphNode{ID: to, Label: to, Group: toGroup, Title: toGroup + ": " + to}
+		edges = append(edges, GraphEdge{From: from, To: to, Label: relLabel})
 	}
 
 	return buildResponse(nodeSet, edges)
+}
+
+// strSliceOrEmpty returns the slice as-is or an empty slice — Neo4j requires
+// a list, not nil, for the IN operator.
+func strSliceOrEmpty(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }

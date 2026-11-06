@@ -7,19 +7,18 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"infragraph/internal/api"
 	"infragraph/internal/graph"
 	"infragraph/internal/parser"
 	"infragraph/internal/runner"
-	"infragraph/web"
 )
 
 const banner = `
 ╔══════════════════════════════════════════════════════╗
 ║  InfraGraph — Attack Surface Graph Correlator        ║
 ║  OSINT / ASM Pipeline  |  Red Team / Bug Bounty      ║
-║  Embedded SQLite + In-Process Subfinder & httpx      ║
 ╚══════════════════════════════════════════════════════╝
 `
 
@@ -29,18 +28,16 @@ func main() {
 	// ----- CLI flags -----
 	target     := flag.String("target", "", "Target domain to enumerate (e.g. example.com)")
 	outputDir  := flag.String("output", "output", "Directory for raw JSON outputs")
-	dbPath     := flag.String("db", "./infragraph.db", "Path to SQLite database file")
+	neoURI     := flag.String("neo4j", "bolt://localhost:7687", "Neo4j bolt URI")
+	neoUser    := flag.String("user", "neo4j", "Neo4j username")
+	neoPass    := flag.String("pass", "infragraph", "Neo4j password")
 	listenAddr := flag.String("listen", ":8080", "API/UI server address")
-	webRoot    := flag.String("web", "", "Custom web root directory (uses embedded UI by default)")
+	webRoot    := flag.String("web", "web", "Static web root directory")
 	ingestOnly := flag.Bool("ingest-only", false, "Skip recon, only ingest existing JSON files in -output dir")
 	serveOnly  := flag.Bool("serve-only", false, "Skip recon and ingestion, only serve the UI")
-	timeout    := flag.String("timeout", "30", "Recon timeout in minutes")
+	timeout    := flag.String("timeout", "30", "Amass timeout in minutes")
 
-	// Legacy flags kept for backwards compatibility
-	_ = flag.String("neo4j", "", "Deprecated: InfraGraph now uses embedded SQLite")
-	_ = flag.String("user", "", "Deprecated")
-	_ = flag.String("pass", "", "Deprecated")
-
+	// ---- New flags ----
 	fresh := flag.Bool("fresh", false,
 		"Delete all nodes for -target before re-ingesting (keeps other targets intact)")
 	reset := flag.Bool("reset", false,
@@ -66,23 +63,25 @@ func main() {
 
 	ctx := context.Background()
 
-	// ----- Open SQLite Database -----
-	log.Printf("[main] Opening database at %s ...", *dbPath)
-	client, err := graph.NewClient(*dbPath)
+	// ----- Connect to Neo4j -----
+	log.Printf("[main] Connecting to Neo4j at %s ...", *neoURI)
+	client, err := graph.NewClient(*neoURI, *neoUser, *neoPass)
 	if err != nil {
-		log.Fatalf("[main] Database connection error: %v", err)
+		log.Fatalf("[main] Neo4j connection error: %v", err)
 	}
 	defer client.Close(ctx)
 
-	if err := client.Verify(ctx); err != nil {
-		log.Fatalf("[main] Database verification failed: %v", err)
+	// Retry connectivity up to 10s (helpful if Neo4j is still starting)
+	for i := 0; i < 5; i++ {
+		if err := client.Verify(ctx); err == nil {
+			break
+		} else if i == 4 {
+			log.Fatalf("[main] Cannot reach Neo4j after retries: %v\nMake sure Neo4j is running on %s", err, *neoURI)
+		}
+		log.Printf("[main] Waiting for Neo4j (%d/5)...", i+1)
+		time.Sleep(2 * time.Second)
 	}
-	log.Printf("[main] Database connected ✓")
-
-	// Ensure schema constraints and tables
-	if err := client.EnsureConstraints(ctx); err != nil {
-		log.Fatalf("[main] Schema setup error: %v", err)
-	}
+	log.Printf("[main] Neo4j connected ✓")
 
 	// ----- Reset / Fresh -----
 	if *reset {
@@ -97,6 +96,11 @@ func main() {
 			log.Fatalf("[main] Fresh clear failed: %v", err)
 		}
 		log.Printf("[main] Domain %s cleared ✓", *target)
+	}
+
+	// Ensure schema constraints
+	if err := client.EnsureConstraints(ctx); err != nil {
+		log.Printf("[main] Constraint setup warning: %v", err)
 	}
 
 	// ----- Recon Phase -----
@@ -160,16 +164,8 @@ func main() {
 	}
 
 	// ----- Serve Phase -----
-	var srv *api.Server
-	if *webRoot != "" {
-		log.Printf("[main] Serving UI from custom directory: %s", *webRoot)
-		srv = api.NewServerFromDir(client, *webRoot)
-	} else {
-		log.Printf("[main] Serving embedded UI")
-		srv = api.NewServer(client, web.AssetFS())
-	}
-
 	log.Printf("[main] Starting UI server on http://localhost%s", *listenAddr)
+	srv := api.NewServer(client, *webRoot)
 	if err := srv.Start(*listenAddr); err != nil {
 		log.Fatalf("[main] Server error: %v", err)
 	}
