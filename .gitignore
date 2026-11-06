@@ -1,10 +1,17 @@
+# Build outputs
 output/
 build/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
 *.log
+
+# Environment / secrets
 .env
-neo4j/data/
-neo4j/logs/
-neo4j/run/
-neo4j/certificates/
-neo4j/licenses/
-/tmp/neo4j.tar.gz
+
+# Subfinder API keys (sensitive — do not commit)
+~/.config/subfinder/provider-config.yaml

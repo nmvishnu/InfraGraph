@@ -1,74 +1,55 @@
 # InfraGraph Makefile
 
-BINARY   := infragraph
-CMD_PATH := ./cmd/infragraph
-BUILD_DIR := ./build
-NEO4J_URI := bolt://localhost:7687
-NEO4J_USER := neo4j
-NEO4J_PASS := infragraph
+BINARY     := infragraph
+CMD_PATH   := ./cmd/infragraph
+BUILD_DIR  := ./build
+DB_PATH    := ./infragraph.db
 
-.PHONY: all build run start-db stop-db clean deps install help
+.PHONY: all build static run ingest serve clean deps check help
 
-## Default: build the binary
-all: build
+## Default: build the static binary
+all: static
 
-## Build the Go binary
+## Build binary (fast dev build)
 build:
-	@echo "[build] Compiling infragraph..."
+	@echo "[build] Compiling $(BINARY)..."
 	@mkdir -p $(BUILD_DIR)
 	go build -o $(BUILD_DIR)/$(BINARY) $(CMD_PATH)
 	@echo "[build] Binary at $(BUILD_DIR)/$(BINARY)"
 
-## Install binary to GOPATH/bin
-install:
-	go install $(CMD_PATH)
-	@echo "[install] infragraph installed to $$(go env GOPATH)/bin/"
+## Build fully self-contained static binary (zero external CGO / dynamic deps)
+static:
+	@echo "[build] Compiling static self-contained binary..."
+	@mkdir -p $(BUILD_DIR)
+	CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o $(BUILD_DIR)/$(BINARY) $(CMD_PATH)
+	@echo "[build] Static binary ready at $(BUILD_DIR)/$(BINARY)"
 
-## Download Go dependencies
+## Download & tidy Go dependencies
 deps:
 	go mod tidy
 
-## Start Neo4j via Docker Compose
-start-db:
-	@echo "[db] Starting Neo4j container..."
-	$${COMPOSE:-docker compose} -f docker/docker-compose.yml up -d neo4j
-	@echo "[db] Neo4j Browser → http://localhost:7474  (neo4j / infragraph)"
-
-## Stop Neo4j
-stop-db:
-	$${COMPOSE:-docker compose} -f docker/docker-compose.yml down
-
-## Run a full scan + serve UI (set TARGET=yourdomain.com)
+## Run a full scan + serve UI (usage: make run TARGET=example.com)
 run: build
 	@if [ -z "$(TARGET)" ]; then \
 		echo "Usage: make run TARGET=example.com"; exit 1; \
 	fi
 	$(BUILD_DIR)/$(BINARY) \
 		-target $(TARGET) \
-		-neo4j $(NEO4J_URI) \
-		-user $(NEO4J_USER) \
-		-pass $(NEO4J_PASS) \
-		-output ./output \
-		-web ./web
+		-db $(DB_PATH) \
+		-output ./output
 
 ## Ingest existing JSON files without re-scanning
 ingest: build
 	$(BUILD_DIR)/$(BINARY) \
 		-ingest-only \
-		-neo4j $(NEO4J_URI) \
-		-user $(NEO4J_USER) \
-		-pass $(NEO4J_PASS) \
-		-output ./output \
-		-web ./web
+		-db $(DB_PATH) \
+		-output ./output
 
-## Only serve the UI (no scan or ingest)
+## Only serve the embedded UI (no scan or ingest)
 serve: build
 	$(BUILD_DIR)/$(BINARY) \
 		-serve-only \
-		-neo4j $(NEO4J_URI) \
-		-user $(NEO4J_USER) \
-		-pass $(NEO4J_PASS) \
-		-web ./web
+		-db $(DB_PATH)
 
 ## Build + verify compilation
 check:
@@ -76,7 +57,7 @@ check:
 	go build ./...
 	@echo "[check] All good!"
 
-## Remove build artifacts
+## Remove build artifacts & temp databases
 clean:
 	rm -rf $(BUILD_DIR)
 

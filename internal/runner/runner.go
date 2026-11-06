@@ -1,13 +1,25 @@
 package runner
 
 import (
+	"bufio"
+	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
+
+	"github.com/projectdiscovery/goflags"
+	"github.com/projectdiscovery/gologger"
+	"github.com/projectdiscovery/gologger/levels"
+	httpxRunner "github.com/projectdiscovery/httpx/runner"
+	"github.com/projectdiscovery/subfinder/v2/pkg/resolve"
+	sfRunner "github.com/projectdiscovery/subfinder/v2/pkg/runner"
 )
 
 // Config holds the runner configuration for a target scan.
@@ -25,14 +37,38 @@ type Result struct {
 	DomainsFile   string // merged unique domain list
 }
 
+// subfinderRecord mirrors the JSONL structure expected by parser.ParseSubfinder.
+type subfinderRecord struct {
+	Host   string `json:"host"`
+	Source string `json:"source"`
+	IP     string `json:"ip"`
+}
+
+// httpxOutputRecord mirrors the JSONL structure expected by parser.ParseHttpx.
+type httpxOutputRecord struct {
+	Input      string   `json:"input"`
+	Host       string   `json:"host"`
+	URL        string   `json:"url"`
+	Scheme     string   `json:"scheme"`
+	StatusCode int      `json:"status_code"`
+	Title      string   `json:"title"`
+	Tech       []string `json:"tech,omitempty"`
+	A          []string `json:"a,omitempty"`
+	CNAME      []string `json:"cname,omitempty"`
+	WebServer  string   `json:"webserver,omitempty"`
+}
+
 // Run orchestrates all recon tools against the target, collecting JSON output files.
 func Run(cfg Config) (*Result, error) {
+	// Silence verbose library logs (Subfinder, httpx, etc.) globally once at start
+	gologger.DefaultLogger.SetMaxLevel(levels.LevelSilent)
+
 	// Wipe the output directory to prevent old domain files from bleeding
 	// into the current scan (especially if a tool fails or times out).
 	if err := os.RemoveAll(cfg.OutputDir); err != nil {
 		log.Printf("[runner] Warning: failed to wipe output directory: %v", err)
 	}
-	
+
 	if err := os.MkdirAll(cfg.OutputDir, 0755); err != nil {
 		return nil, fmt.Errorf("create output dir: %w", err)
 	}
@@ -95,42 +131,103 @@ func Run(cfg Config) (*Result, error) {
 	return result, nil
 }
 
-// runSubfinder executes subfinder and writes JSONL output to outPath.
-func runSubfinder(target, outPath, timeout string) error {
-	sf, err := exec.LookPath("subfinder")
-	if err != nil {
-		// Try GOPATH/bin
-		home, _ := os.UserHomeDir()
-		sf = filepath.Join(home, "go", "bin", "subfinder")
-		if _, err2 := os.Stat(sf); err2 != nil {
-			return fmt.Errorf("subfinder not found in PATH or ~/go/bin")
+// parseTimeoutMinutes parses timeout strings like "30m", "30", or durations into integer minutes.
+func parseTimeoutMinutes(timeoutStr string, defaultMinutes int) int {
+	if timeoutStr == "" {
+		return defaultMinutes
+	}
+	if d, err := time.ParseDuration(timeoutStr); err == nil {
+		m := int(d.Minutes())
+		if m > 0 {
+			return m
 		}
 	}
-	
-	args := []string{
-		"-d", target,
-		"-json",
-		"-o", outPath,
+	trimmed := strings.TrimSuffix(strings.TrimSpace(timeoutStr), "m")
+	if n, err := strconv.Atoi(trimmed); err == nil && n > 0 {
+		return n
 	}
-	
-	if timeout != "" {
-		args = append(args, "-max-time", timeout)
-	}
-
-	cmd := exec.Command(sf, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	return defaultMinutes
 }
 
-// runAmass executes amass enum and writes JSONL output to outPath.
+// runSubfinder enumerates subdomains using subfinder as an embedded library and writes JSONL output to outPath.
+func runSubfinder(target, outPath, timeout string) error {
+	// Always ensure outPath exists so downstream parsers and mergeDomains don't fail
+	if err := os.WriteFile(outPath, []byte(""), 0644); err != nil {
+		log.Printf("[runner] Warning: failed to initialize %s: %v", outPath, err)
+	}
+
+	timeoutMinutes := parseTimeoutMinutes(timeout, 30)
+
+	var (
+		mu      sync.Mutex
+		results []subfinderRecord
+	)
+
+	opts := &sfRunner.Options{
+		Threads:            10,
+		Timeout:            30,
+		MaxEnumerationTime: timeoutMinutes,
+		ResultCallback: func(result *resolve.HostEntry) {
+			if result == nil || result.Host == "" {
+				return
+			}
+			mu.Lock()
+			results = append(results, subfinderRecord{
+				Host:   result.Host,
+				Source: result.Source,
+				IP:     "",
+			})
+			mu.Unlock()
+		},
+	}
+
+	sf, err := sfRunner.NewRunner(opts)
+	if err != nil {
+		return fmt.Errorf("create subfinder runner: %w", err)
+	}
+
+	ctx := context.Background()
+	if _, err := sf.EnumerateSingleDomainWithCtx(ctx, target, nil); err != nil {
+		return fmt.Errorf("subfinder enumeration failed: %w", err)
+	}
+
+	f, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("create subfinder output file: %w", err)
+	}
+	defer f.Close()
+
+	writer := bufio.NewWriter(f)
+	for _, r := range results {
+		data, err := json.Marshal(r)
+		if err != nil {
+			continue
+		}
+		if _, err := writer.Write(data); err != nil {
+			return fmt.Errorf("write subfinder record: %w", err)
+		}
+		if err := writer.WriteByte('\n'); err != nil {
+			return fmt.Errorf("write newline: %w", err)
+		}
+	}
+	return writer.Flush()
+}
+
+// runAmass executes amass enum if available and writes output to outPath.
+// Amass is optional — if amass-v4 is not found, it skips gracefully without error.
 func runAmass(target, outPath, timeout string) error {
+	// Always ensure outPath exists so downstream parsers and mergeDomains don't fail
+	if err := os.WriteFile(outPath, []byte(""), 0644); err != nil {
+		log.Printf("[runner] Warning: failed to initialize %s: %v", outPath, err)
+	}
+
 	amass, err := exec.LookPath("amass-v4")
 	if err != nil {
 		home, _ := os.UserHomeDir()
 		amass = filepath.Join(home, "go", "bin", "amass-v4")
 		if _, err2 := os.Stat(amass); err2 != nil {
-			return fmt.Errorf("amass v4 not found in PATH or ~/go/bin")
+			log.Printf("[runner] amass-v4 not found — skipping (subfinder provides sufficient coverage)")
+			return nil
 		}
 	}
 	args := []string{
@@ -148,40 +245,118 @@ func runAmass(target, outPath, timeout string) error {
 	return cmd.Run()
 }
 
-// runHttpx probes a list of domains and writes JSONL to outPath.
+// runHttpx probes discovered domains using httpx as an embedded library and writes JSONL output to outPath.
 func runHttpx(domainsFile, outPath string) error {
-	// Resolution order:
-	// 1. ~/go/bin/httpx  (local Go install — avoids Python httpx at /usr/bin/httpx)
-	// 2. "httpx" in PATH (works in Docker where it's in /usr/local/bin)
-	// 3. "httpx-toolkit"  (Kali/Debian package name)
-	home, _ := os.UserHomeDir()
-	httpx := filepath.Join(home, "go", "bin", "httpx")
-	if _, err := os.Stat(httpx); err != nil {
-		// Try PATH — but verify it's ProjectDiscovery's httpx, not the Python one
-		httpx, err = exec.LookPath("httpx")
-		if err != nil {
-			httpx, err = exec.LookPath("httpx-toolkit")
-			if err != nil {
-				return fmt.Errorf("ProjectDiscovery httpx not found at ~/go/bin/httpx, in PATH, or as httpx-toolkit")
-			}
+	// Always ensure outPath exists so downstream parsers don't fail
+	if err := os.WriteFile(outPath, []byte(""), 0644); err != nil {
+		log.Printf("[runner] Warning: failed to initialize %s: %v", outPath, err)
+	}
+
+	data, err := os.ReadFile(domainsFile)
+	if err != nil {
+		return fmt.Errorf("read domains file %s: %w", domainsFile, err)
+	}
+
+	var targets []string
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			targets = append(targets, line)
 		}
 	}
 
-	cmd := exec.Command(httpx,
-		"-l", domainsFile,
-		"-json",
-		"-o", outPath,
-		"-title",
-		"-tech-detect",
-		"-ip",
-		"-cname", // Crucial: fetches CNAMEs now that we don't get them from Amass JSON
-		"-silent",
-		"-follow-redirects",
-		"-status-code",
+	if len(targets) == 0 {
+		log.Printf("[runner] No domains to probe with httpx")
+		return nil
+	}
+
+	var (
+		mu      sync.Mutex
+		results []httpxOutputRecord
 	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+
+	options := httpxRunner.Options{
+		Methods:         "GET",
+		InputTargetHost: goflags.StringSlice(targets),
+		ExtractTitle:    true,
+		TechDetect:      true,
+		StatusCode:      true,
+		FollowRedirects: true,
+		Threads:         25,
+		Timeout:         10,
+		OnResult: func(r httpxRunner.Result) {
+			if r.Err != nil {
+				return
+			}
+			host := r.Host
+			if host == "" {
+				host = r.Input
+			}
+			scheme := r.Scheme
+			if scheme == "" {
+				if strings.HasPrefix(r.URL, "https://") {
+					scheme = "https"
+				} else if strings.HasPrefix(r.URL, "http://") {
+					scheme = "http"
+				}
+			}
+
+			ips := r.A
+			if len(ips) == 0 && r.HostIP != "" {
+				ips = []string{r.HostIP}
+			}
+
+			record := httpxOutputRecord{
+				Input:      r.Input,
+				Host:       host,
+				URL:        r.URL,
+				Scheme:     scheme,
+				StatusCode: r.StatusCode,
+				Title:      r.Title,
+				Tech:       r.Technologies,
+				A:          ips,
+				CNAME:      r.CNAMEs,
+				WebServer:  r.WebServer,
+			}
+
+			mu.Lock()
+			results = append(results, record)
+			mu.Unlock()
+		},
+	}
+
+	if err := options.ValidateOptions(); err != nil {
+		return fmt.Errorf("validate httpx options: %w", err)
+	}
+
+	hpRunner, err := httpxRunner.New(&options)
+	if err != nil {
+		return fmt.Errorf("create httpx runner: %w", err)
+	}
+	defer hpRunner.Close()
+
+	hpRunner.RunEnumeration()
+
+	f, err := os.Create(outPath)
+	if err != nil {
+		return fmt.Errorf("create httpx output file: %w", err)
+	}
+	defer f.Close()
+
+	writer := bufio.NewWriter(f)
+	for _, r := range results {
+		line, err := json.Marshal(r)
+		if err != nil {
+			continue
+		}
+		if _, err := writer.Write(line); err != nil {
+			return fmt.Errorf("write httpx record: %w", err)
+		}
+		if err := writer.WriteByte('\n'); err != nil {
+			return fmt.Errorf("write newline: %w", err)
+		}
+	}
+	return writer.Flush()
 }
 
 // mergeDomains reads subfinder and amass JSON files, extracts hostnames,
